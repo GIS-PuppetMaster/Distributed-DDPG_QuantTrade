@@ -1,12 +1,4 @@
-from jqdatasdk import *
-import pandas as pd
-import numpy as np
-import glo
-import time
-import datetime
-from pyalgotrade import *
 from sklearn.preprocessing import *
-import tushare as ts
 from stock_date import *
 from copy import *
 

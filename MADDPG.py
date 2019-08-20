@@ -3,6 +3,7 @@ from Experience_pool import *
 from ACModel import ACModel
 from stock_date import *
 import multiprocessing
+from Experience_pool import Experience_pool
 import os
 
 
@@ -48,13 +49,14 @@ def run_model():
     global thread_list
     global thread_flag
     global sys_model
-
+    # 建立经验池
+    ep = Experience_pool()
     # 载入经验池
-    load()
+    ep.load()
     print("建立模型")
     # 建立模型
     for i in range(glo.agent_num):
-        thread_list[i] = ACModel(i, model, thread_flag)
+        thread_list[i] = ACModel(i, model, thread_flag,ep)
     for episode in range(glo.train_times):
         # init model and env
         print("episode:" + str(episode))
@@ -75,11 +77,11 @@ def run_model():
             print("times:" + str(t))
             print("运行模型")
             flag = False
-            while len(exp_pool) <= glo.experience_pool_size:
-                if len(exp_pool) < glo.experience_pool_size:
+            while len(ep.exp_pool) <= glo.experience_pool_size:
+                if len(ep.exp_pool) < glo.experience_pool_size:
                     # 观察环境模式
                     flag = True
-                    print("观察模式，经验池大小：" + str(len(exp_pool)))
+                    print("观察模式，经验池大小：" + str(len(ep.exp_pool)))
                 execute_model('r', episode)
                 """
                 jobs = [multiprocessing.Process(target=run_nn, args=(
@@ -111,7 +113,7 @@ def run_model():
                 """
         # 保存经验池
         if episode % glo.train_times == int(glo.train_times / 10):
-            save_experience_pool()
+            save_experience_pool(ep)
             # 保存权重
             for i in range(glo.agent_num):
                 thread_list[i].save_weights()
@@ -129,10 +131,10 @@ def save_weights():
 """
 
 
-def save_experience_pool():
+def save_experience_pool(ep):
     print("经验存储中......请勿退出!!!")
     with open("Data/experience_pool.json", "w", encoding='UTF-8') as f:
-        json.dump(exp_pool, f, default=lambda obj: obj.__dict__)
+        json.dump(ep.exp_pool, f, default=lambda obj: obj.__dict__)
     print("经验存储完成")
 
 

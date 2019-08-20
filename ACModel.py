@@ -5,7 +5,6 @@ from Experience import Experience
 from StockSimEnv import Env
 import tensorflow as tf
 import os
-import Experience_pool as ep
 import numpy as np
 import glo
 import plotly as py
@@ -13,13 +12,14 @@ import plotly.graph_objs as go
 
 
 class ACModel(Process):
-    def __init__(self, index, mode, thread_flag):
+    def __init__(self, index, mode, thread_flag, ep):
         self.index = index
         self.env = Env()
         self.sess = None
         self.actor = None
         self.critic = None
         self.thread_flag = thread_flag
+        self.ep = ep
         stock_state, agent_state = self.env.get_state()
         self.stock_state = stock_state
         self.agent_state = agent_state
@@ -53,8 +53,8 @@ class ACModel(Process):
             self.critic.target_model.load_weights(path)
 
     def train_nn(self):
-        stock_state_, agent_state_, action_, reward_, next_stock_state_, next_agent_state_ = ep.get_info_from_experience_list(
-            ep.get_experience_batch())
+        stock_state_, agent_state_, action_, reward_, next_stock_state_, next_agent_state_ = self.ep.get_info_from_experience_list(
+            self.ep.get_experience_batch())
         yi = (np.array(reward_) + glo.gamma * np.array(
             self.critic.target_model.predict([next_stock_state_, next_agent_state_, self.actor.target_model.predict(
                 [next_stock_state_, next_agent_state_])]))).tolist()
@@ -75,8 +75,7 @@ class ACModel(Process):
         if reward is not None:
             experience = Experience(self.stock_state, self.agent_state, action, reward, next_stock_state,
                                     next_agent_state)
-            ep.append_experience(experience)
-
+            self.ep.append_experience(experience)
             self.stock_state = next_stock_state
             self.agent_state = next_stock_state
             # 绘图
@@ -89,7 +88,7 @@ class ACModel(Process):
     def run(self):
         self.init_nn()
         self.thread_flag[self.index] = 'i'
-        print("编号"+str(self.index)+"完成模型初始化")
+        print("编号" + str(self.index) + "完成模型初始化")
         while self.mode.value != 'e':
             while self.mode.value != 'r':
                 pass
