@@ -1,4 +1,3 @@
-import numpy as np
 class Experience:
     stock_state = [[]]
     agent_state = []

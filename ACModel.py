@@ -13,21 +13,32 @@ import plotly.graph_objs as go
 
 
 class ACModel(Process):
-    def __init__(self, index, mode):
+    def __init__(self, index, mode, thread_flag):
+        self.index = index
+        self.env = Env()
+        self.sess = None
+        self.actor = None
+        self.critic = None
+        self.thread_flag = thread_flag
+        stock_state, agent_state = self.env.get_state()
+        self.stock_state = stock_state
+        self.agent_state = agent_state
+        self.mode = mode
+        self.episode = 0
+        Process.__init__(self)
+
+    def init_env(self):
+        self.env = Env()
+
+    def init_nn(self):
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 屏蔽通知信息和警告信息
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         sess = tf.Session(config=config)
         self.sess = sess
-        self.index = index
+        index = self.index
         self.actor = ActorNetwork(sess)
         self.critic = CriticNetwork(sess)
-        self.env = Env()
-        stock_state,agent_state=self.env.get_state()
-        self.stock_state = stock_state
-        self.agent_state = agent_state
-        self.mode = mode
-        self.episode = 0
         path = "训练历史权重/Agent编号" + str(index) + "/main_actor_weights.h5"
         if os.path.exists(path):
             self.actor.model.load_weights(path)
@@ -40,7 +51,6 @@ class ACModel(Process):
         path = "训练历史权重/Agent编号" + str(index) + "/target_critic_weights.h5"
         if os.path.exists(path):
             self.critic.target_model.load_weights(path)
-        Process.__init__(self)
 
     def train_nn(self):
         stock_state_, agent_state_, action_, reward_, next_stock_state_, next_agent_state_ = ep.get_info_from_experience_list(
@@ -77,10 +87,20 @@ class ACModel(Process):
             self.env.__init__()
 
     def run(self):
-        if self.mode == "r":
+        self.init_nn()
+        self.thread_flag[self.index] = 'i'
+        print("编号"+str(self.index)+"完成模型初始化")
+        while self.mode.value != 'e':
+            while self.mode.value != 'r':
+                pass
             self.run_nn()
-        elif self.mode == "t":
+            self.thread_flag[self.index] = 'r'
+            print("编号" + str(self.index) + "完成运行")
+            while self.mode.value != 't':
+                pass
             self.train_nn()
+            self.thread_flag[self.index] = 't'
+            print("编号" + str(self.index) + "完成训练")
 
     def draw_sim_plot(self, env, i, episode):
         time_list = env.time_list
@@ -170,7 +190,7 @@ class ACModel(Process):
         }, auto_open=False, filename=path)
 
     def save_weights(self):
-        dis = "训练历史权重/Agent编号" + str(i)
+        dis = "训练历史权重/Agent编号" + str(self.index)
         # 目录不存在则创建目录
         if not os.path.exists(dis):
             os.makedirs(dis)
@@ -184,4 +204,5 @@ class ACModel(Process):
         self.actor.model.save_weights(dis + '/main_actor_weights_' + str(self.episode) + '.h5', overwrite=True)
         self.actor.target_model.save_weights(dis + '/target_actor_weights_' + str(self.episode) + '.h5', overwrite=True)
         self.critic.model.save_weights(dis + '/main_critic_weights_' + str(self.episode) + '.h5', overwrite=True)
-        self.critic.target_model.save_weights(dis + '/target_critic_weights_' + str(self.episode) + '.h5', overwrite=True)
+        self.critic.target_model.save_weights(dis + '/target_critic_weights_' + str(self.episode) + '.h5',
+                                              overwrite=True)

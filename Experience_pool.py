@@ -51,7 +51,10 @@ def append_experience(experience):
     global lock
     with lock:
         experience_cursor = (experience_cursor + 1) % glo.experience_pool_size
-        exp_pool[experience_cursor] = experience
+        if experience_cursor >= len(exp_pool):
+            exp_pool.append(experience)
+        else:
+            exp_pool[experience_cursor] = experience
 
 
 def get_experience_batch():
@@ -62,11 +65,14 @@ def get_experience_batch():
     global exp_pool
     return random.sample(exp_pool, glo.mini_batch_size)
 
+
 def load():
     import os
     import json
-    import Experience
+    from  Experience import Experience
+    global exp_pool
     if os.path.exists("Data/experience_pool.json"):
+        print("载入经验池")
         with open("Data/experience_pool.json", "r", encoding="UTF-8") as f:
             s = f.read()
             exp_pool = json.loads(s, object_hook=Experience.object_hook)
