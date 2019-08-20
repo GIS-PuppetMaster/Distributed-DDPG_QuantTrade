@@ -4,7 +4,7 @@ from copy import *
 
 
 class ActorNetwork(object):
-    def __init__(self, sess, model, target_model):
+    def __init__(self, sess):
         import keras.backend as K
         import tensorflow as tf
 
@@ -15,14 +15,9 @@ class ActorNetwork(object):
         self.action_size = glo.action_size
         self.TAU = glo.tau
         self.LEARNING_RATE = glo.actor_learning_rate
-        self.model = model
-        self.weights = model.trainable_weights
-        self.stock_state = model.input[0]
-        self.agent_state = model.input[1]
-        self.target_model = target_model
-        self.target_weights = target_model.trainable_weights
-        self.target_stock_state = target_model.input[0]
-        self.target_agent_state = target_model.input[1]
+        self.model, self.weights, self.stock_state, self.agent_state = self.build_actor_network()
+        self.target_model, self.target_weights, self.target_stock_state, self.target_agent_state = self.build_actor_network()
+
         self.action_gradients = tf.placeholder(tf.float32, [None, glo.action_size])
         params_gradients = tf.gradients(self.model.output, self.weights, -self.action_gradients)
         grad = zip(params_gradients, self.weights)
@@ -75,3 +70,43 @@ class ActorNetwork(object):
             weights += glo.alpha / (glo.npop * glo.sigma) * np.dot(N.T, A)
         self.model.set_weights(weights)
         """
+
+    def build_actor_network(self):
+        from keras.models import Model
+        from keras.layers import Input, SeparableConv2D, Activation, BatchNormalization, Dense, Concatenate, Flatten
+        from keras.utils import plot_model
+        """
+           输入：state(stock,agent)
+           输出：action
+           loss：max(q)，即-tf.reduce_mean(q)
+           :return:actor_net_model,weights,stock_state,agent_state
+           """
+        input_stock_state = Input(shape=(glo.day, glo.stock_state_size, glo.count))
+        # input_stock_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_stock_state)
+        input_agent_state = Input(shape=(glo.agent_state_size,))
+        # input_agent_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_agent_state)
+        x_stock_state = SeparableConv2D(filters=1, kernel_size=6, padding='valid', data_format='channels_first')(
+            input_stock_state)
+        x_stock_state = Activation('tanh')(x_stock_state)
+        x_stock_state = BatchNormalization(axis=2, epsilon=1e-4, scale=True, center=True)(x_stock_state)
+        x_stock_state = Flatten()(x_stock_state)
+        dense01 = Dense(16)(x_stock_state)
+        dense01 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense01)
+        dense01 = Activation('tanh')(dense01)
+        dense01 = Dense(8)(dense01)
+        dense01 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense01)
+        dense01 = Activation('tanh')(dense01)
+        merge_layer = Concatenate()([dense01, input_agent_state])
+        dense02 = Dense(32)(merge_layer)
+        dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
+        dense02 = Activation('tanh')(dense02)
+        dense02 = Dense(32)(dense02)
+        dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
+        dense02 = Activation('tanh')(dense02)
+        dense02 = Dense(8)(dense02)
+        dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
+        dense02 = Activation('tanh')(dense02)
+        output = Dense(glo.action_size, name='output', activation='tanh')(dense02)
+        model = Model(inputs=[input_stock_state, input_agent_state], outputs=[output])
+        plot_model(model, to_file='actor_net.png', show_shapes=True)
+        return model,model.trainable_weights,input_stock_state,input_agent_state

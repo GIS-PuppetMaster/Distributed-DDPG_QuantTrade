@@ -1,3 +1,4 @@
+import numpy as np
 class Experience:
     stock_state = [[]]
     agent_state = []
@@ -17,6 +18,8 @@ class Experience:
     def get_experience(self):
         return {'stock_state': self.stock_state, 'agent_state': self.action, 'action': self.action,
                 'reward': self.reward, 'stock_state2': self.stock_state2, 'agent_state2': self.agent_state2}
+
+
 
     def __repr__(self):
         return repr(
