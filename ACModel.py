@@ -78,6 +78,16 @@ class ACModel(Process):
         # 预测前先向网络添加噪声
         self.actor.apply_noise()
         action = self.actor.model.predict([self.stock_state, self.agent_state])[0]
+        # TODO:完成ES噪声算法后删除
+        action += np.random.randn(2, )*0.5
+        if action[0] > 1:
+            action[0] = 1
+        if action[0] < -1:
+            action[0] = -1
+        if action[1] > 1:
+            action[1] = 1
+        if action[1] < -1:
+            action[1] = -1
         next_stock_state, next_agent_state, reward = self.env.trade(action)
         if reward is not None:
             # 解决numpy.float32没有__dict__方法，使得经验无法使用Json.dump的问题
