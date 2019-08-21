@@ -9,7 +9,7 @@ import numpy as np
 import glo
 import plotly as py
 import plotly.graph_objs as go
-
+from datetime import *
 
 class ACModel(Process):
     def __init__(self, index, mode, thread_flag, ep, time_stamp, episode, step):
@@ -107,6 +107,7 @@ class ACModel(Process):
             self.env.reset()
 
     def run(self):
+        glo.init()
         while self.mode.value != 'e':
             if self.mode.value == 'i' and self.time_stamp.value != self.last_stamp:
                 self.init_nn()

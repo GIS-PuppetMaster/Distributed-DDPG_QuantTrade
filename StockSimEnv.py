@@ -214,7 +214,4 @@ class Env:
             reward = None
         # 交易了返回下一天的状态，否则返回下一个frequency的状态
         state = self.get_state(date=next_date)
-        # 如果下一次将要溢出则重置环境
-        if over_flow:
-            self.reset()
         return state[0], state[1], reward
