@@ -65,7 +65,7 @@ class CriticNetwork(object):
         # dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
         dense02 = Activation('tanh')(dense02)
         # q
-        output = Dense(glo.action_size, name='output', activation='tanh')(dense02)
+        output = Dense(1, name='output', activation='tanh')(dense02)
         model = Model(inputs=[input_stock_state, input_agent_state, input_action], outputs=[output])
         model.compile(optimizer=Adam(glo.critic_learning_rate), loss='mse')
         plot_model(model, to_file='critic_net.png', show_shapes=True)

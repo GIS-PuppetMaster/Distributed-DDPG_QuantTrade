@@ -1,8 +1,6 @@
 from datetime import *
 import glo
 from jqdatasdk import *
-import numpy as np
-import pandas as pd
 import random
 
 
@@ -10,8 +8,7 @@ class StockDate:
     def __init__(self, stock_code):
         # np[str]
         self.stock_code = stock_code
-        self.date_list = np.array(
-            pd.read_csv('Data/' + self.stock_code.replace(".", "_") + ".csv")['Unnamed: 0'])
+        self.date_list = glo.date[stock_code]
         # datetime
         self.date = datetime.strptime(self.date_list[0], "%Y-%m-%d %H:%M:%S")
         self.index = 0
@@ -35,7 +32,10 @@ class StockDate:
         frequency = int(glo.frequency[:-1])
         self.date = datetime.strptime(self.date_list[self.index + frequency], "%Y-%m-%d %H:%M:%S")
         self.index += frequency
-        return self.date
+        # 如果下一步溢出则返回None
+        if self.index + frequency >= len(self.date_list):
+            return self.date, True
+        return self.date, False
 
     def last_date(self):
         frequency = int(glo.frequency[:-1])
@@ -46,9 +46,10 @@ class StockDate:
     def next_day(self):
         day = self.date.day
         # 如果日期没有变更则next_date
-        while self.date.day == day:
-            self.next_date()
-        return self.date
+        over_flow = False
+        while self.date.day == day and not over_flow:
+            d, over_flow = self.next_date()
+        return self.date, over_flow
 
     def last_day(self):
         # 将时间调至前一天同一时间

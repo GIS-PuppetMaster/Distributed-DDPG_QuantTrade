@@ -2,7 +2,7 @@ class Experience:
     stock_state = [[]]
     agent_state = []
     action = []
-    reward = 0
+    reward = []
     stock_state2 = [[]]
     agent_state2 = []
 
@@ -19,10 +19,11 @@ class Experience:
                 'reward': self.reward, 'stock_state2': self.stock_state2, 'agent_state2': self.agent_state2}
 
 
-
+    """
     def __repr__(self):
         return repr(
             (self.stock_state, self.agent_state, self.action, self.reward, self.stock_state2, self.agent_state2))
+    """
 
     @staticmethod
     def object_hook(d):

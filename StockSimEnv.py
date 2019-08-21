@@ -1,13 +1,13 @@
 from sklearn.preprocessing import *
 from stock_date import *
-from copy import *
+import numpy as np
 
 
 # auth("13074581737", "trustno1")
 
 
 class Env:
-    def __init__(self, stock_code=None, start_date=None, ori_money=pow(10, 6), quant=-1):
+    def __init__(self, stock_code=None, start_date=None, ori_money=pow(10, 6), quant=None):
         """
         初始化环境
         :return: None
@@ -20,12 +20,31 @@ class Env:
         # 默认随机初始化时间
         self.gdate = StockDate(self.stock_code)
         self.gdate.set_date(start_date)
-        self.temp_date = deepcopy(self.gdate)
+        self.temp_date = StockDate(self.stock_code)
+        self.temp_date.date = self.gdate.date
+        self.temp_date.index = self.gdate.index
         self.ori_money = ori_money
         self.ori_value = 0
         self.money = self.ori_money
         self.stock_value = []
-        self.data = pd.read_csv('Data/' + self.stock_code.replace(".", "_") + ".csv", index_col='Unnamed: 0')
+        self.data = glo.data[self.stock_code]
+        self.price = self.get_stock_price(self.gdate.get_date())
+        self.init_with_ori_stock_value(self.price, quant)
+        self.time_list = []
+        self.profit_list = []
+        self.reference_list = []
+        self.price_list = []
+
+    def reset(self, start_date=None, ori_money=pow(10, 6), quant=None):
+        self.gdate = StockDate(self.stock_code)
+        self.gdate.set_date(start_date)
+        self.temp_date = StockDate(self.stock_code)
+        self.temp_date.date = self.gdate.date
+        self.temp_date.index = self.gdate.index
+        self.ori_money = ori_money
+        self.ori_value = 0
+        self.money = self.ori_money
+        self.stock_value = []
         self.price = self.get_stock_price(self.gdate.get_date())
         self.init_with_ori_stock_value(self.price, quant)
         self.time_list = []
@@ -132,6 +151,7 @@ class Env:
         quant = 0
         flag = False
         action_0 = action[0]
+        self.price=self.get_stock_price()
         # 交易开关激活时，计算quant，否则quant=0
         if action[1] > 0:
             # 买入
@@ -162,12 +182,14 @@ class Env:
             # 如果实际交易了则记录
             # [股价,手数]
             self.stock_value.append([price, quant])
+        print("日期:" + str(self.gdate.get_date()))
+        print("action:" + str(action))
         print("实际交易量：" + str(quant))
         print("实际交易金额（收入为正卖出为负）：" + str(-price * 100 * quant))
         # 更新环境时间片段
         # 如果没交易则下一时刻
         if quant == 0:
-            next_date = self.gdate.next_date()
+            next_date, over_flow = self.gdate.next_date()
         # 如果交易了则跳到下一天
         else:
             # 记录交易日期
@@ -180,7 +202,7 @@ class Env:
                 ((self.price * 100 * self.stock_value[0][1] - self.ori_value) / (self.ori_value + self.ori_money)))
             # 记录股价
             self.price_list.append(self.price)
-            next_date = self.gdate.next_day()
+            next_date, over_flow = self.gdate.next_day()
         # 计算reward
         if flag:
             # 惩罚
@@ -188,8 +210,11 @@ class Env:
         else:
             reward = (self.money + self.get_stock_total_value(
                 self.get_stock_price(next_date)) - self.ori_money - self.ori_value) / (self.ori_money + self.ori_value)
-        if self.gdate.index == len(self.gdate.date_list) - 1:
+        if self.gdate.index == len(self.gdate.date_list) - 1 or over_flow:
             reward = None
         # 交易了返回下一天的状态，否则返回下一个frequency的状态
         state = self.get_state(date=next_date)
+        # 如果下一次将要溢出则重置环境
+        if over_flow:
+            self.reset()
         return state[0], state[1], reward

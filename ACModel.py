@@ -12,7 +12,7 @@ import plotly.graph_objs as go
 
 
 class ACModel(Process):
-    def __init__(self, index, mode, thread_flag, ep):
+    def __init__(self, index, mode, thread_flag, ep, time_stamp, episode, step):
         self.index = index
         self.env = Env()
         self.sess = None
@@ -24,7 +24,10 @@ class ACModel(Process):
         self.stock_state = stock_state
         self.agent_state = agent_state
         self.mode = mode
-        self.episode = 0
+        self.episode = episode
+        self.step = step
+        self.time_stamp = time_stamp
+        self.last_stamp = -1
         Process.__init__(self)
 
     def init_env(self):
@@ -41,15 +44,19 @@ class ACModel(Process):
         self.critic = CriticNetwork(sess)
         path = "训练历史权重/Agent编号" + str(index) + "/main_actor_weights.h5"
         if os.path.exists(path):
+            print("载入权重main_actor_weights.h5")
             self.actor.model.load_weights(path)
         path = "训练历史权重/Agent编号" + str(index) + "/target_actor_weights.h5"
         if os.path.exists(path):
+            print("载入权重target_actor_weights.h5")
             self.actor.target_model.load_weights(path)
         path = "训练历史权重/Agent编号" + str(index) + "/main_critic_weights.h5"
         if os.path.exists(path):
+            print("载入权重main_critic_weights.h5")
             self.critic.model.load_weights(path)
         path = "训练历史权重/Agent编号" + str(index) + "/target_critic_weights.h5"
         if os.path.exists(path):
+            print("载入权重target_critic_weights.h5")
             self.critic.target_model.load_weights(path)
 
     def train_nn(self):
@@ -73,33 +80,43 @@ class ACModel(Process):
         action = self.actor.model.predict([self.stock_state, self.agent_state])[0]
         next_stock_state, next_agent_state, reward = self.env.trade(action)
         if reward is not None:
-            experience = Experience(self.stock_state, self.agent_state, action, reward, next_stock_state,
+            # 解决numpy.float32没有__dict__方法，使得经验无法使用Json.dump的问题
+            a = []
+            for i in range(glo.action_size):
+                a.append(action[i].item())
+            experience = Experience(self.stock_state, self.agent_state, [a], [[float(str(reward))]], next_stock_state,
                                     next_agent_state)
             self.ep.append_experience(experience)
             self.stock_state = next_stock_state
-            self.agent_state = next_stock_state
+            self.agent_state = next_agent_state
             # 绘图
-            if self.index % glo.train_step == 50:
-                self.draw_sim_plot(self.env, self.index, self.episode)
+            if self.step.value % (glo.train_step / glo.draw_frequency) == 0 and self.step.value != 0:
+                self.draw_sim_plot(self.env, self.index, self.episode.value)
         else:
-            # 如果下一天是数据边界，则重置环境并退出线程
-            self.env.__init__()
+            # 如果下一天是数据边界，则重置环境
+            self.env.reset()
 
     def run(self):
-        self.init_nn()
-        self.thread_flag[self.index] = 'i'
-        print("编号" + str(self.index) + "完成模型初始化")
         while self.mode.value != 'e':
-            while self.mode.value != 'r':
-                pass
-            self.run_nn()
-            self.thread_flag[self.index] = 'r'
-            print("编号" + str(self.index) + "完成运行")
-            while self.mode.value != 't':
-                pass
-            self.train_nn()
-            self.thread_flag[self.index] = 't'
-            print("编号" + str(self.index) + "完成训练")
+            if self.mode.value == 'i' and self.time_stamp.value != self.last_stamp:
+                self.init_nn()
+                self.last_stamp = int(self.time_stamp.value)
+                self.thread_flag[self.index] = 'i'
+                # print("编号" + str(self.index) + "完成模型初始化")
+            elif self.mode.value == 'r' and self.time_stamp.value != self.last_stamp:
+                self.run_nn()
+                self.last_stamp = int(self.time_stamp.value)
+                self.thread_flag[self.index] = 'r'
+                # print("编号" + str(self.index) + "完成运行")
+            elif self.mode.value == 't' and self.time_stamp.value != self.last_stamp:
+                self.train_nn()
+                self.last_stamp = int(self.time_stamp.value)
+                self.thread_flag[self.index] = 't'
+                # print("编号" + str(self.index) + "完成训练")
+            elif self.mode.value == 's' and self.time_stamp.value != self.last_stamp:
+                self.save_weights()
+                self.last_stamp = int(self.time_stamp.value)
+                self.thread_flag[self.index] = 's'
 
     def draw_sim_plot(self, env, i, episode):
         time_list = env.time_list
@@ -200,8 +217,9 @@ class ACModel(Process):
         self.critic.model.save_weights(dis + '/main_critic_weights.h5', overwrite=True)
         self.critic.target_model.save_weights(dis + '/target_critic_weights.h5', overwrite=True)
         # 保存历史权重
-        self.actor.model.save_weights(dis + '/main_actor_weights_' + str(self.episode) + '.h5', overwrite=True)
-        self.actor.target_model.save_weights(dis + '/target_actor_weights_' + str(self.episode) + '.h5', overwrite=True)
-        self.critic.model.save_weights(dis + '/main_critic_weights_' + str(self.episode) + '.h5', overwrite=True)
-        self.critic.target_model.save_weights(dis + '/target_critic_weights_' + str(self.episode) + '.h5',
+        self.actor.model.save_weights(dis + '/' + str(self.episode.value) + '_main_actor_weights.h5', overwrite=True)
+        self.actor.target_model.save_weights(dis + '/' + str(self.episode.value) + '_target_actor_weights.h5',
+                                             overwrite=True)
+        self.critic.model.save_weights(dis + '/' + str(self.episode.value) + '_main_critic_weights.h5', overwrite=True)
+        self.critic.target_model.save_weights(dis + '/' + str(self.episode.value) + '_target_critic_weights.h5',
                                               overwrite=True)
