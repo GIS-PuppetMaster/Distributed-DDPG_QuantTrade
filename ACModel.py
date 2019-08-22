@@ -259,7 +259,7 @@ class ACModel(Process):
                             titlefont={'color': '#00ccff'}, tickfont={'color': '#00ccff'},
                             showgrid=False, position=0.03, zeroline=False, anchor='free'),
                 paper_bgcolor='#FFFFFF',
-                plot_bgcolor='#FFFFFF',
+                plot_bgcolor='#FFFFFF'
             )
         }, auto_open=False, filename=path)
         loss_scatter = go.Scatter(x=[i for i in range(len(self.step_loss_list))],
@@ -269,11 +269,17 @@ class ACModel(Process):
                                   mode='lines',
                                   opacity=1)
         path = dis + "/loss.html"
-        py.offline.plot({"data": [loss_scatter], "layout": go.layout(
-            title="loss 编号" + str(self.index),
-            xaxis=dict(title='训练次数', type="category", showgrid=False, zeroline=False),
-            yaxis=dict(title='loss', showgrid=False, zeroline=False),
-        )}, auto_open=False, filename=path)
+        py.offline.plot({
+            "data": [loss_scatter],
+            "layout": go.Layout(
+                title="loss 编号" + str(self.index),
+                xaxis=dict(title='训练次数', type="category", showgrid=False, zeroline=False),
+                yaxis=dict(title='loss', showgrid=False, zeroline=False),
+                paper_bgcolor='#FFFFFF',
+                plot_bgcolor='#FFFFFF'
+            )
+        }, auto_open=False, filename=path)
+
 
     def save_weights(self):
         dis = "训练历史权重/Agent编号" + str(self.index)
