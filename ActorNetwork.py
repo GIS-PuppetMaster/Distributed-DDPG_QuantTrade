@@ -1,4 +1,4 @@
-from keras.layers import LSTM
+from keras.layers import LSTM, Reshape
 
 import glo
 from StockSimEnv import Env
@@ -77,7 +77,8 @@ class ActorNetwork(object):
 
     def build_actor_network(self):
         from keras.models import Model
-        from keras.layers import Input, SeparableConv2D, Activation, BatchNormalization, Dense, Concatenate, Flatten, regularizers
+        from keras.layers import Input, Conv1D, Activation, BatchNormalization, Dense, Concatenate, Flatten, \
+            regularizers
         from keras.utils import plot_model
         """
            输入：state(stock,agent)
@@ -85,32 +86,38 @@ class ActorNetwork(object):
            loss：max(q)，即-tf.reduce_mean(q)
            :return:actor_net_model,weights,stock_state,agent_state
            """
-        input_stock_state = Input(shape=(glo.day, glo.stock_state_size, glo.count))
+        input_stock_state = Input(shape=(glo.count, glo.day, glo.stock_state_size))
         # input_stock_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_stock_state)
         input_agent_state = Input(shape=(glo.agent_state_size,))
         # input_agent_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_agent_state)
-        x_stock_state = SeparableConv2D(filters=1, kernel_size=6, padding='valid', data_format='channels_first')(
-            input_stock_state)
-        x_stock_state = Activation('tanh')(x_stock_state)
+        # 首先把日期时序和特征压缩
+        x_stock_state = Reshape((glo.count, glo.day * glo.stock_state_size))(input_stock_state)
+        # 对分钟时序进行卷积
+        x_stock_state = Conv1D(filters=glo.day*glo.stock_state_size, kernel_size=32, padding='valid')(x_stock_state)
         x_stock_state = BatchNormalization(axis=2, epsilon=1e-4, scale=True, center=True)(x_stock_state)
-        x_stock_state = Flatten()(x_stock_state)
-        dense01 = Dense(16,kernel_regularizer=regularizers.l2(0.01))(x_stock_state)
+        x_stock_state = Activation('tanh')(x_stock_state)
+        # 展开日期时序和特征
+        x_stock_state = Reshape((glo.day, glo.stock_state_size))(x_stock_state)
+        x_stock_state = LSTM(16, activation='tanh', recurrent_activation='tanh',kernel_regularizer=regularizers.l2(0.01), unroll=True)(x_stock_state)
+        # x_stock_state = Flatten()(x_stock_state)
+        """
+        dense01 = Dense(16, kernel_regularizer=regularizers.l2(0.01))(x_stock_state)
         dense01 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense01)
         dense01 = Activation('tanh')(dense01)
-        dense01 = Dense(8,kernel_regularizer=regularizers.l2(0.01))(dense01)
+        dense01 = Dense(8, kernel_regularizer=regularizers.l2(0.01))(dense01)
         dense01 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense01)
         dense01 = Activation('tanh')(dense01)
-        merge_layer = Concatenate()([dense01, input_agent_state])
-        dense02= LSTM(32,activation='tanh',recurrent_activation='tanh',kernel_regularizer=regularizers.l2(0.01),unroll=True)(merge_layer)
+        """
+        merge_layer = Concatenate()([x_stock_state, input_agent_state])
         """
         dense02 = Dense(32)(merge_layer)
         dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
         dense02 = Activation('tanh')(dense02)
         """
-        dense02 = Dense(32,kernel_regularizer=regularizers.l2(0.01))(dense02)
+        dense02 = Dense(32, kernel_regularizer=regularizers.l2(0.01))(merge_layer)
         dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
         dense02 = Activation('tanh')(dense02)
-        dense02 = Dense(8,kernel_regularizer=regularizers.l2(0.01))(dense02)
+        dense02 = Dense(8, kernel_regularizer=regularizers.l2(0.01))(dense02)
         dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
         dense02 = Activation('tanh')(dense02)
         output = Dense(glo.action_size, name='output', activation='tanh')(dense02)

@@ -42,7 +42,7 @@ class CriticNetwork(object):
            loss：(reward+gamma*q_)-q
            :return:
            """
-        input_stock_state = Input(shape=(glo.day, glo.stock_state_size, glo.count))
+        input_stock_state = Input(shape=(glo.count, glo.day, glo.stock_state_size))
         # input_stock_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_stock_state)
         input_agent_state = Input(shape=(glo.agent_state_size,))
         # input_agent_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_agent_state)

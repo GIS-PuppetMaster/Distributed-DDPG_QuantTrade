@@ -119,7 +119,8 @@ class Env:
         # 归一化
         agent_state = MinMaxScaler().fit_transform(scale(agent_state, axis=0))
         # 整理维度
-        stock_state = np.array(stock_state).reshape(1, glo.day, glo.stock_state_size, glo.count).tolist()
+        stock_state = np.array(stock_state).transpose((1, 0, 2)).tolist()
+        #stock_state = np.array(stock_state).reshape(1, glo.day, glo.stock_state_size, glo.count).tolist()
         agent_state = np.array(agent_state).reshape(1, glo.agent_state_size).tolist()
         return stock_state, agent_state
 
@@ -185,10 +186,12 @@ class Env:
             # 如果实际交易了则记录
             # [股价,手数]
             self.stock_value.append([price, quant])
+        """
         print("日期:" + str(self.gdate.get_date()))
         print("action:" + str(action))
         print("实际交易量：" + str(quant))
         print("实际交易金额（收入为正卖出为负）：" + str(-price * 100 * quant))
+        """
         # 更新环境时间片段
         # 如果没交易则下一时刻
         if quant == 0:
