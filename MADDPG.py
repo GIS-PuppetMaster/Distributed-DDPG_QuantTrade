@@ -46,9 +46,10 @@ def execute_model(m):
     flag = True
     start_time = datetime.now()
     while flag:
-        if (datetime.now() - start_time).seconds >= 20:
+        if (datetime.now() - start_time).seconds >= 120:
             print("threadflag:" + str(thread_flag))
             print("time_stamp:" + str(time_stamp.value))
+            break
         pause_counter = 0
         flag = False
         # print(str(thread_flag))
@@ -56,7 +57,7 @@ def execute_model(m):
             thread = thread_flag[i]
             if thread == 'p':
                 pause_counter += 1
-            if thread != m:
+            if thread != m and thread!='p':
                 flag = True
                 break
             # 全部暂停，表示全部满一年，可以进行下一轮训练
@@ -122,8 +123,8 @@ def run_model():
         # 保存经验池
         if episode % (glo.train_times / glo.save_exp_frequency) == 0 and episode != 0:
             save_experience_pool(ep)
-            # 保存权重
-            execute_model('s')
+        # 每个episode保存权重
+        execute_model('s')
     # 终止所有进程
     print("终止进程")
     execute_model('e')

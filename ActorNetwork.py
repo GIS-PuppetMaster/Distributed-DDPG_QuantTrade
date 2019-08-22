@@ -1,3 +1,5 @@
+from keras.layers import LSTM
+
 import glo
 from StockSimEnv import Env
 from copy import *
@@ -75,7 +77,7 @@ class ActorNetwork(object):
 
     def build_actor_network(self):
         from keras.models import Model
-        from keras.layers import Input, SeparableConv2D, Activation, BatchNormalization, Dense, Concatenate, Flatten
+        from keras.layers import Input, SeparableConv2D, Activation, BatchNormalization, Dense, Concatenate, Flatten, regularizers
         from keras.utils import plot_model
         """
            输入：state(stock,agent)
@@ -92,20 +94,23 @@ class ActorNetwork(object):
         x_stock_state = Activation('tanh')(x_stock_state)
         x_stock_state = BatchNormalization(axis=2, epsilon=1e-4, scale=True, center=True)(x_stock_state)
         x_stock_state = Flatten()(x_stock_state)
-        dense01 = Dense(16)(x_stock_state)
+        dense01 = Dense(16,kernel_regularizer=regularizers.l2(0.01))(x_stock_state)
         dense01 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense01)
         dense01 = Activation('tanh')(dense01)
-        dense01 = Dense(8)(dense01)
+        dense01 = Dense(8,kernel_regularizer=regularizers.l2(0.01))(dense01)
         dense01 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense01)
         dense01 = Activation('tanh')(dense01)
         merge_layer = Concatenate()([dense01, input_agent_state])
+        dense02= LSTM(32,activation='tanh',recurrent_activation='tanh',kernel_regularizer=regularizers.l2(0.01),unroll=True)(merge_layer)
+        """
         dense02 = Dense(32)(merge_layer)
         dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
         dense02 = Activation('tanh')(dense02)
-        dense02 = Dense(32)(dense02)
+        """
+        dense02 = Dense(32,kernel_regularizer=regularizers.l2(0.01))(dense02)
         dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
         dense02 = Activation('tanh')(dense02)
-        dense02 = Dense(8)(dense02)
+        dense02 = Dense(8,kernel_regularizer=regularizers.l2(0.01))(dense02)
         dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
         dense02 = Activation('tanh')(dense02)
         output = Dense(glo.action_size, name='output', activation='tanh')(dense02)
