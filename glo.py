@@ -1,6 +1,7 @@
 import random
 import pandas as pd
 import numpy as np
+
 count = 32
 frequency = '1d'
 day = 5
@@ -17,7 +18,7 @@ agent_state_size = 3
 action_size = 2
 epsilon = 0.1
 agent_num = 8
-actor_learning_rate = 0.000001
+actor_learning_rate = 0.0001
 critic_learning_rate = 0.0001
 # 每轮训练画多少次图像
 draw_frequency = 10

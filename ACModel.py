@@ -31,6 +31,7 @@ class ACModel(Process):
         self.date = _date
         self.dict = _dict
         self.lock = lock
+        self.step_loss_list = []
         Process.__init__(self)
 
     def init_env(self):
@@ -81,10 +82,12 @@ class ACModel(Process):
         # 开始训练
         print("编号" + str(self.index) + "开始训练critic")
         step_loss = self.critic.model.train_on_batch([stock_state_, agent_state_, action_], [yi])
+        self.step_loss_list.append(step_loss)
         print("编号" + str(self.index) + "生成a_for_grad")
         a_for_grad = self.actor.model.predict([stock_state_, agent_state_])
         print("编号" + str(self.index) + "生成梯度")
         grads = self.critic.gradients(stock_state_, agent_state_, a_for_grad)
+        print("编号" + str(self.index) + "梯度\n" + str(grads))
         print("编号" + str(self.index) + "训练actor")
         self.actor.train(stock_state_, agent_state_, grads)
         print("编号" + str(self.index) + "更新target")
@@ -240,7 +243,8 @@ class ACModel(Process):
             "data": [profit_scatter, reference_scatter, price_scatter, trade_bar,
                      amount_scatter],
             "layout": go.Layout(
-                title=env.stock_code + "回测结果" + "     初始资金：" + str(env.ori_money) + "     初始股票价值" + str(
+                title=env.stock_code + " 编号" + str(self.index) + " 回测结果" + "     初始资金：" + str(
+                    env.ori_money) + "     初始股票价值" + str(
                     env.ori_value) + "    总初始本金:" + str(env.ori_money + env.ori_value),
                 xaxis=dict(title='日期', type="category", showgrid=False, zeroline=False),
                 yaxis=dict(title='收益率', showgrid=False, zeroline=False),
@@ -258,6 +262,18 @@ class ACModel(Process):
                 plot_bgcolor='#FFFFFF',
             )
         }, auto_open=False, filename=path)
+        loss_scatter = go.Scatter(x=[i for i in range(len(self.step_loss_list))],
+                                  y=self.step_loss_list,
+                                  name='loss',
+                                  line=dict(color='orange'),
+                                  mode='lines',
+                                  opacity=1)
+        path = dis + "/loss.html"
+        py.offline.plot({"data": [loss_scatter], "layout": go.layout(
+            title="loss 编号" + str(self.index),
+            xaxis=dict(title='训练次数', type="category", showgrid=False, zeroline=False),
+            yaxis=dict(title='loss', showgrid=False, zeroline=False),
+        )}, auto_open=False, filename=path)
 
     def save_weights(self):
         dis = "训练历史权重/Agent编号" + str(self.index)

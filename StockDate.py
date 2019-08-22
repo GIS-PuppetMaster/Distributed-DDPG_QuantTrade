@@ -19,7 +19,7 @@ class StockDate:
         if date is None:
             # 随机初始化日期
             self.date = datetime.strptime(
-                self.date_list[random.randint(glo.day * 300 + 1, len(self.date_list) - 365 * 300 - 1)],
+                self.date_list[random.randint(glo.day * 300 + 1, len(self.date_list) - 1)],
                 "%Y-%m-%d %H:%M:%S")
         else:
             self.date = date
