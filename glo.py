@@ -8,7 +8,7 @@ day = 5
 stock_code_list = ['000517.XSHE', '000938.XSHE', '600094.XSHG', '600519.XSHG', '601318.XSHG']
 # DDPG超参数
 train_times = 100
-train_step = 10000
+train_step = 600
 gamma = 0.4
 mini_batch_size = 64
 experience_pool_size = 50000
@@ -21,7 +21,7 @@ agent_num = 8
 actor_learning_rate = 0.000001
 critic_learning_rate = 0.0001
 # 每轮训练画多少次图像
-draw_frequency = 20
+draw_frequency = 10
 # 一共保存多少次经验
 save_exp_frequency = 10
 # ES超参数
@@ -31,6 +31,7 @@ alpha = 0.001
 # 只读数据，初始化后不要进行操作
 data = {}
 date = {}
+dict = {}
 
 
 def init():
@@ -41,6 +42,12 @@ def init():
     for s in stock_code_list:
         temp = np.array(data[s].index)
         date[s] = temp.reshape(len(temp), )
+    for s in stock_code_list:
+        date_list = date[s]
+        temp = {}
+        for i in range(len(date_list)):
+            temp[date_list[i]] = i
+        dict[s] = temp
 
 
 def random_stock_code():

@@ -48,10 +48,12 @@ class ActorNetwork(object):
         reward = 0
         for i in range(20):
             action = temp_actor.predict([current_stock_state, current_agent_state])[0]
-            next_stock_state, next_agent_state, r = env.trade(action)
+            next_stock_state, next_agent_state, r, pause = env.trade(action)
             reward += r
             current_stock_state = next_stock_state
             current_agent_state = next_agent_state
+            if pause:
+                break
         return reward
 
     def apply_noise(self):
@@ -109,4 +111,4 @@ class ActorNetwork(object):
         output = Dense(glo.action_size, name='output', activation='tanh')(dense02)
         model = Model(inputs=[input_stock_state, input_agent_state], outputs=[output])
         plot_model(model, to_file='actor_net.png', show_shapes=True)
-        return model,model.trainable_weights,input_stock_state,input_agent_state
+        return model, model.trainable_weights, input_stock_state, input_agent_state

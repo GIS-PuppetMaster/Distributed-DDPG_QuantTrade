@@ -11,6 +11,7 @@ import plotly as py
 import plotly.graph_objs as go
 from datetime import *
 
+
 class ACModel(Process):
     def __init__(self, index, mode, thread_flag, ep, time_stamp, episode, step):
         self.index = index
@@ -28,6 +29,7 @@ class ACModel(Process):
         self.step = step
         self.time_stamp = time_stamp
         self.last_stamp = -1
+        self.pause = False
         Process.__init__(self)
 
     def init_env(self):
@@ -79,7 +81,7 @@ class ACModel(Process):
         self.actor.apply_noise()
         action = self.actor.model.predict([self.stock_state, self.agent_state])[0]
         # TODO:完成ES噪声算法后删除
-        action += np.random.randn(2, )*0.5
+        action += np.random.randn(2, ) * 0.5
         if action[0] > 1:
             action[0] = 1
         if action[0] < -1:
@@ -88,23 +90,21 @@ class ACModel(Process):
             action[1] = 1
         if action[1] < -1:
             action[1] = -1
-        next_stock_state, next_agent_state, reward = self.env.trade(action)
-        if reward is not None:
-            # 解决numpy.float32没有__dict__方法，使得经验无法使用Json.dump的问题
-            a = []
-            for i in range(glo.action_size):
-                a.append(action[i].item())
-            experience = Experience(self.stock_state, self.agent_state, [a], [[float(str(reward))]], next_stock_state,
-                                    next_agent_state)
-            self.ep.append_experience(experience)
-            self.stock_state = next_stock_state
-            self.agent_state = next_agent_state
-            # 绘图
-            if self.step.value % (glo.train_step / glo.draw_frequency) == 0 and self.step.value != 0:
-                self.draw_sim_plot(self.env, self.index, self.episode.value)
-        else:
-            # 如果下一天是数据边界，则重置环境
-            self.env.reset()
+        next_stock_state, next_agent_state, reward, pause = self.env.trade(action)
+        self.pause = pause
+        # 解决numpy.float32没有__dict__方法，使得经验无法使用Json.dump的问题
+        a = []
+        for i in range(glo.action_size):
+            a.append(action[i].item())
+        experience = Experience(self.stock_state, self.agent_state, [a], [[float(str(reward))]], next_stock_state,
+                                next_agent_state)
+        self.ep.append_experience(experience)
+        self.stock_state = next_stock_state
+        self.agent_state = next_agent_state
+        # 绘图
+        if (self.step.value % (glo.train_step / glo.draw_frequency) == 0 and self.step.value != 0) or (
+                self.env.gdate.date - self.env.start_date).days >= 60:
+            self.draw_sim_plot(self.env, self.index, self.episode.value)
 
     def run(self):
         glo.init()
@@ -112,17 +112,26 @@ class ACModel(Process):
             if self.mode.value == 'i' and self.time_stamp.value != self.last_stamp:
                 self.init_nn()
                 self.last_stamp = int(self.time_stamp.value)
-                self.thread_flag[self.index] = 'i'
+                if not self.pause:
+                    self.thread_flag[self.index] = 'i'
+                else:
+                    self.thread_flag[self.index] = 'p'
                 # print("编号" + str(self.index) + "完成模型初始化")
             elif self.mode.value == 'r' and self.time_stamp.value != self.last_stamp:
                 self.run_nn()
                 self.last_stamp = int(self.time_stamp.value)
-                self.thread_flag[self.index] = 'r'
+                if not self.pause:
+                    self.thread_flag[self.index] = 'r'
+                else:
+                    self.thread_flag[self.index] = 'p'
                 # print("编号" + str(self.index) + "完成运行")
             elif self.mode.value == 't' and self.time_stamp.value != self.last_stamp:
                 self.train_nn()
                 self.last_stamp = int(self.time_stamp.value)
-                self.thread_flag[self.index] = 't'
+                if not self.pause:
+                    self.thread_flag[self.index] = 't'
+                else:
+                    self.thread_flag[self.index] = 'p'
                 # print("编号" + str(self.index) + "完成训练")
             elif self.mode.value == 's' and self.time_stamp.value != self.last_stamp:
                 self.save_weights()

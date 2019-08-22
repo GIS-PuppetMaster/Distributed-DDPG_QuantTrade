@@ -26,27 +26,44 @@ def execute_model(m):
             # value必须倒数第二个设置
             model.value = m
             # time_stamp最后设置，表示命令已更新
+        if time_stamp.value < 1000:
             time_stamp.value += 1
-
+        else:
+            time_stamp.value = 0
+        for i in range(glo.agent_num):
             thread_list[i].start()
     else:
         print("执行模型操作：" + m)
         for i in range(glo.agent_num):
             model.value = m
+        if time_stamp.value < 1000:
             time_stamp.value += 1
+        else:
+            time_stamp.value = 0
 
     # 等待线程完成反馈
     print("等待进程执行中..................................................")
     flag = True
+    start_time = datetime.now()
     while flag:
+        if (datetime.now() - start_time).seconds >= 20:
+            print("threadflag:" + str(thread_flag))
+            print("time_stamp:" + str(time_stamp.value))
+        pause_counter = 0
         flag = False
         # print(str(thread_flag))
         for i in range(glo.agent_num):
             thread = thread_flag[i]
+            if thread == 'p':
+                pause_counter += 1
             if thread != m:
                 flag = True
                 break
+            # 全部暂停，表示全部满一年，可以进行下一轮训练
+            if pause_counter == glo.agent_num:
+                return True
     print("进程执行完毕")
+    return False
 
 
 def run_model():
@@ -79,22 +96,29 @@ def run_model():
             print("     times:" + str(t))
             print("运行模型")
             flag = False
+            pause = False
             while len(ep.exp_pool) <= glo.experience_pool_size:
+                pause = False
                 if len(ep.exp_pool) < glo.experience_pool_size:
                     # 观察环境模式
                     flag = True
                     # 连续运行
                     print("观察模式，经验池大小：" + str(len(ep.exp_pool)))
-                execute_model('r')
+                if execute_model('r'):
+                    pause = True
+
                 if len(ep.exp_pool) == glo.experience_pool_size:
                     if flag:
                         print("观察完成,经验池大小：" + str(len(ep.exp_pool)))
                         save_experience_pool(ep)
                     break
+            if pause:
+                break
             if sys_model.__contains__("train") or sys_model.__contains__("both"):
                 # 执行训练
                 print("执行训练")
-                execute_model('t')
+                if execute_model('t'):
+                    break
         # 保存经验池
         if episode % (glo.train_times / glo.save_exp_frequency) == 0 and episode != 0:
             save_experience_pool(ep)

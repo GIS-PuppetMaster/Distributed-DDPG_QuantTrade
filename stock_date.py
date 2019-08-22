@@ -12,6 +12,7 @@ class StockDate:
         # datetime
         self.date = datetime.strptime(self.date_list[0], "%Y-%m-%d %H:%M:%S")
         self.index = 0
+        self.dict = glo.dict[stock_code]
 
     def set_date(self, date=None):
         # 输入datetime
@@ -22,7 +23,8 @@ class StockDate:
                 "%Y-%m-%d %H:%M:%S")
         else:
             self.date = date
-        self.index = self.find_index(0, self.date_list.size - 1)
+        # self.index = self.find_index(0, self.date_list.size - 1)
+        self.index = self.find_index()
 
     def set_date_with_index(self, date, index):
         self.date = date
@@ -54,31 +56,22 @@ class StockDate:
     def last_day(self):
         # 将时间调至前一天同一时间
         self.date = self.date - timedelta(days=1)
-        i = self.find_index(0, self.date_list.size - 1)
+        i = self.find_index()
         while i is None:
             self.date = self.date - timedelta(days=1)
-            i = self.find_index(0, self.date_list.size - 1)
+            i = self.find_index()
         self.index = i
         return self.date
 
     def get_date(self):
         return self.date
 
-    def find_index(self, start, end):
-        """
-        二分查找当前日期对应的索引
-        :param start: 查找起始索引
-        :param end: 查找终止索引
-        :return: 如果找到则返回索引，否则返回None
-        """
-        if start <= end:
-            mid = int((start + end) / 2)
-            if datetime.strptime(self.date_list[mid], "%Y-%m-%d %H:%M:%S").__gt__(self.date):
-                return self.find_index(start, mid - 1)
-            elif datetime.strptime(self.date_list[mid], "%Y-%m-%d %H:%M:%S").__lt__(self.date):
-                return self.find_index(mid + 1, end)
-            return mid
-        return None
+    def find_index(self):
+        try:
+            index = self.dict[str(self.date)]
+            return index
+        except:
+            return None
 
     def get_index(self):
         return self.index
