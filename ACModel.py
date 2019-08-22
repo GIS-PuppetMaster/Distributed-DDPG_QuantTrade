@@ -87,7 +87,7 @@ class ACModel(Process):
         a_for_grad = self.actor.model.predict([stock_state_, agent_state_])
         print("编号" + str(self.index) + "生成梯度")
         grads = self.critic.gradients(stock_state_, agent_state_, a_for_grad)
-        print("编号" + str(self.index) + "梯度\n" + str(grads))
+        # print("编号" + str(self.index) + "梯度\n" + str(grads))
         print("编号" + str(self.index) + "训练actor")
         self.actor.train(stock_state_, agent_state_, grads)
         print("编号" + str(self.index) + "更新target")
@@ -168,6 +168,12 @@ class ACModel(Process):
                 self.thread_flag[self.index] = 't'
                 self.lock.release()
                 # print("编号" + str(self.index) + "完成训练")
+            elif self.mode.value == 'v' and self.time_stamp.value != self.last_stamp:
+                self.init_env()
+                self.lock.acquire()
+                self.last_stamp = int(self.time_stamp.value)
+                self.thread_flag[self.index] = 'v'
+                self.lock.release()
             elif self.mode.value == 's' and self.time_stamp.value != self.last_stamp:
                 self.save_weights()
                 self.lock.acquire()
@@ -273,7 +279,7 @@ class ACModel(Process):
             "data": [loss_scatter],
             "layout": go.Layout(
                 title="loss 编号" + str(self.index),
-                xaxis=dict(title='训练次数', type="category", showgrid=False, zeroline=False),
+                xaxis=dict(title='训练次数', showgrid=False, zeroline=False),
                 yaxis=dict(title='loss', showgrid=False, zeroline=False),
                 paper_bgcolor='#FFFFFF',
                 plot_bgcolor='#FFFFFF'

@@ -45,7 +45,7 @@ def execute_model(m):
     flag = True
     start_time = datetime.now()
     while flag:
-        if (datetime.now() - start_time).seconds >= 60:
+        if (datetime.now() - start_time).seconds >= 120:
             print("threadflag:" + str(thread_flag))
             print("time_stamp:" + str(time_stamp.value))
             os._exit(1)
@@ -82,8 +82,7 @@ def run_model():
         multi_episode.value = episode
         # init model and env
         print("初始化环境")
-        for i in range(glo.agent_num):
-            thread_list[i].init_env()
+        execute_model('v')
         for t in range(glo.train_step):
             multi_step.value = t
             # 多进程运行模型
