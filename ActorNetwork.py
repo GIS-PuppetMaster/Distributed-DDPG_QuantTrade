@@ -1,4 +1,3 @@
-from keras.layers import LSTM, Reshape
 
 import glo
 from StockSimEnv import Env
@@ -50,12 +49,10 @@ class ActorNetwork(object):
         reward = 0
         for i in range(20):
             action = temp_actor.predict([current_stock_state, current_agent_state])[0]
-            next_stock_state, next_agent_state, r, pause = env.trade(action)
+            next_stock_state, next_agent_state, r = env.trade(action)
             reward += r
             current_stock_state = next_stock_state
             current_agent_state = next_agent_state
-            if pause:
-                break
         return reward
 
     def apply_noise(self):
@@ -77,8 +74,7 @@ class ActorNetwork(object):
 
     def build_actor_network(self):
         from keras.models import Model
-        from keras.layers import Input, Conv1D, Activation, BatchNormalization, Dense, Concatenate, Flatten, \
-            regularizers
+        from keras.layers import Input, Conv1D, Activation, BatchNormalization, Dense, Concatenate, Flatten,regularizers,Reshape,LSTM
         from keras.utils import plot_model
         """
            输入：state(stock,agent)

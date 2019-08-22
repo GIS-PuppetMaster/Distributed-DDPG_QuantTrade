@@ -53,7 +53,7 @@ class Env:
         self.reference_list = []
         self.price_list = []
         self.start_date = self.gdate.get_date()
-        print("重置环境")
+        print("重置环境完成")
 
     def init_with_ori_stock_value(self, price, quant=None):
         temp_quant = quant
@@ -119,8 +119,9 @@ class Env:
         # 归一化
         agent_state = MinMaxScaler().fit_transform(scale(agent_state, axis=0))
         # 整理维度
-        stock_state = np.array(stock_state).transpose((1, 0, 2)).tolist()
-        #stock_state = np.array(stock_state).reshape(1, glo.day, glo.stock_state_size, glo.count).tolist()
+        stock_state = np.array(stock_state).transpose((1, 0, 2)).reshape(1, glo.count, glo.day,
+                                                                         glo.stock_state_size).tolist()
+        # stock_state = np.array(stock_state).reshape(1, glo.day, glo.stock_state_size, glo.count).tolist()
         agent_state = np.array(agent_state).reshape(1, glo.agent_state_size).tolist()
         return stock_state, agent_state
 
@@ -216,10 +217,9 @@ class Env:
         else:
             reward = (self.money + self.get_stock_total_value(
                 self.get_stock_price(next_date)) - self.ori_money - self.ori_value) / (self.ori_money + self.ori_value)
-        pause = False
+
         # 交易了返回下一天的状态，否则返回下一个frequency的状态
         state = self.get_state(date=next_date)
         if self.gdate.index == len(self.gdate.date_list) - 1 or over_flow or (next_date - self.start_date).days >= 365:
-            self.reset()
-            pause = True
-        return state[0], state[1], reward, pause
+            reward=None
+        return state[0], state[1], reward

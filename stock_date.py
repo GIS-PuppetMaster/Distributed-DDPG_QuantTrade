@@ -67,10 +67,9 @@ class StockDate:
         return self.date
 
     def find_index(self):
-        try:
-            index = self.dict[str(self.date)]
-            return index
-        except:
+        if str(self.date) in self.dict.keys():
+            return self.dict[str(self.date)]
+        else:
             return None
 
     def get_index(self):

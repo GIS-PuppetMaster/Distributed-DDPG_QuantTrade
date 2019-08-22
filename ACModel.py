@@ -3,17 +3,17 @@ from ActorNetwork import ActorNetwork
 from CriticNetwork import CriticNetwork
 from Experience import Experience
 from StockSimEnv import Env
-import tensorflow as tf
 import os
 import numpy as np
 import glo
 import plotly as py
 import plotly.graph_objs as go
+import sys
 from datetime import *
 
 
 class ACModel(Process):
-    def __init__(self, index, mode, thread_flag, ep, time_stamp, episode, step):
+    def __init__(self, index, mode, thread_flag, ep, time_stamp, episode, step, _data, _date, _dict, lock):
         self.index = index
         self.env = Env()
         self.sess = None
@@ -21,21 +21,23 @@ class ACModel(Process):
         self.critic = None
         self.thread_flag = thread_flag
         self.ep = ep
-        stock_state, agent_state = self.env.get_state()
-        self.stock_state = stock_state
-        self.agent_state = agent_state
+        self.stock_state, self.agent_state = self.env.get_state()
         self.mode = mode
         self.episode = episode
         self.step = step
         self.time_stamp = time_stamp
         self.last_stamp = -1
-        self.pause = False
+        self.data = _data
+        self.date = _date
+        self.dict = _dict
+        self.lock = lock
         Process.__init__(self)
 
     def init_env(self):
         self.env = Env()
 
     def init_nn(self):
+        import tensorflow as tf
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 屏蔽通知信息和警告信息
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
@@ -60,27 +62,44 @@ class ACModel(Process):
         if os.path.exists(path):
             print("载入权重target_critic_weights.h5")
             self.critic.target_model.load_weights(path)
+        """
+        os.remove('日志/')
+        os.makedirs('日志/')
+        f = open('日志/'+str(self.index)+'_trade.log', 'a')
+        sys.stdout = f
+        sys.stderr = f
+        """
 
     def train_nn(self):
+        print("编号" + str(self.index) + "获取经验包")
         stock_state_, agent_state_, action_, reward_, next_stock_state_, next_agent_state_ = self.ep.get_info_from_experience_list(
             self.ep.get_experience_batch())
+        print("编号" + str(self.index) + "生成yi")
         yi = (np.array(reward_) + glo.gamma * np.array(
             self.critic.target_model.predict([next_stock_state_, next_agent_state_, self.actor.target_model.predict(
                 [next_stock_state_, next_agent_state_])]))).tolist()
         # 开始训练
+        print("编号" + str(self.index) + "开始训练critic")
         step_loss = self.critic.model.train_on_batch([stock_state_, agent_state_, action_], [yi])
+        print("编号" + str(self.index) + "生成a_for_grad")
         a_for_grad = self.actor.model.predict([stock_state_, agent_state_])
+        print("编号" + str(self.index) + "生成梯度")
         grads = self.critic.gradients(stock_state_, agent_state_, a_for_grad)
+        print("编号" + str(self.index) + "训练actor")
         self.actor.train(stock_state_, agent_state_, grads)
+        print("编号" + str(self.index) + "更新target")
         # 更新参数
         self.actor.update_target()
         self.critic.update_target()
 
     def run_nn(self):
         # 预测前先向网络添加噪声
+        print("编号" + str(self.index) + "添加噪声")
         self.actor.apply_noise()
+        print("编号" + str(self.index) + "预测动作")
         action = self.actor.model.predict([self.stock_state, self.agent_state])[0]
         # TODO:完成ES噪声算法后删除
+        print("编号" + str(self.index) + "添加噪声")
         action += np.random.randn(2, ) * 0.5
         if action[0] > 1:
             action[0] = 1
@@ -90,53 +109,68 @@ class ACModel(Process):
             action[1] = 1
         if action[1] < -1:
             action[1] = -1
-        next_stock_state, next_agent_state, reward, pause = self.env.trade(action)
-        self.pause = pause
-        # 解决numpy.float32没有__dict__方法，使得经验无法使用Json.dump的问题
-        a = []
-        for i in range(glo.action_size):
-            a.append(action[i].item())
-        experience = Experience(self.stock_state, self.agent_state, [a], [[float(str(reward))]], next_stock_state,
-                                next_agent_state)
-        self.ep.append_experience(experience)
-        self.stock_state = next_stock_state
-        self.agent_state = next_agent_state
-        # 绘图
-        if (self.step.value % (glo.train_step / glo.draw_frequency) == 0 and self.step.value != 0) or (
-                self.env.gdate.date - self.env.start_date).days >= 60:
-            self.draw_sim_plot(self.env, self.index, self.episode.value)
+        print("编号" + str(self.index) + "进行交易")
+        next_stock_state, next_agent_state, reward = self.env.trade(action)
+        if reward is not None:
+            # 解决numpy.float32没有__dict__方法，使得经验无法使用Json.dump的问题
+            print("编号" + str(self.index) + "append经验")
+            a = []
+            for i in range(glo.action_size):
+                a.append(action[i].item())
+            experience = Experience(self.stock_state, self.agent_state, [a], [[float(str(reward))]], next_stock_state,
+                                    next_agent_state)
+            self.ep.append_experience(experience)
+            self.stock_state = next_stock_state
+            self.agent_state = next_agent_state
+            # 绘图
+            if (self.step.value % (glo.train_step / glo.draw_frequency) == 0 and self.step.value != 0) or (
+                    self.env.gdate.date - self.env.start_date).days % 60 == 0:
+                print("编号" + str(self.index) + "绘图")
+                self.draw_sim_plot(self.env, self.index, self.episode.value)
+        else:
+            self.env.reset()
+            self.stock_state, self.agent_state = self.env.get_state()
 
     def run(self):
-        glo.init()
+        glo.data = self.data
+        glo.date = self.date
+        glo.dict = self.dict
+        self.data = None
+        self.date = None
+        self.dict = None
         while self.mode.value != 'e':
+            """
+            print("mode:"+str(self.mode.value))
+            print("last_stamp:"+str(self.last_stamp))
+            print("time_stamp:"+str(self.time_stamp.value))
+            """
             if self.mode.value == 'i' and self.time_stamp.value != self.last_stamp:
                 self.init_nn()
+                self.lock.acquire()
                 self.last_stamp = int(self.time_stamp.value)
-                if not self.pause:
-                    self.thread_flag[self.index] = 'i'
-                else:
-                    self.thread_flag[self.index] = 'p'
+                self.thread_flag[self.index] = 'i'
+                self.lock.release()
                 # print("编号" + str(self.index) + "完成模型初始化")
             elif self.mode.value == 'r' and self.time_stamp.value != self.last_stamp:
                 self.run_nn()
+                self.lock.acquire()
                 self.last_stamp = int(self.time_stamp.value)
-                if not self.pause:
-                    self.thread_flag[self.index] = 'r'
-                else:
-                    self.thread_flag[self.index] = 'p'
+                self.thread_flag[self.index] = 'r'
+                self.lock.release()
                 # print("编号" + str(self.index) + "完成运行")
             elif self.mode.value == 't' and self.time_stamp.value != self.last_stamp:
                 self.train_nn()
+                self.lock.acquire()
                 self.last_stamp = int(self.time_stamp.value)
-                if not self.pause:
-                    self.thread_flag[self.index] = 't'
-                else:
-                    self.thread_flag[self.index] = 'p'
+                self.thread_flag[self.index] = 't'
+                self.lock.release()
                 # print("编号" + str(self.index) + "完成训练")
             elif self.mode.value == 's' and self.time_stamp.value != self.last_stamp:
                 self.save_weights()
+                self.lock.acquire()
                 self.last_stamp = int(self.time_stamp.value)
                 self.thread_flag[self.index] = 's'
+                self.lock.release()
 
     def draw_sim_plot(self, env, i, episode):
         time_list = env.time_list

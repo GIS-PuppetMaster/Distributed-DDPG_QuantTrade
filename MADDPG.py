@@ -1,5 +1,4 @@
 import json
-
 from ACModel import ACModel
 from stock_date import *
 import multiprocessing
@@ -46,25 +45,18 @@ def execute_model(m):
     flag = True
     start_time = datetime.now()
     while flag:
-        if (datetime.now() - start_time).seconds >= 120:
+        if (datetime.now() - start_time).seconds >= 60:
             print("threadflag:" + str(thread_flag))
             print("time_stamp:" + str(time_stamp.value))
-            break
-        pause_counter = 0
+            os._exit(1)
         flag = False
         # print(str(thread_flag))
         for i in range(glo.agent_num):
             thread = thread_flag[i]
-            if thread == 'p':
-                pause_counter += 1
-            if thread != m and thread!='p':
+            if thread != m:
                 flag = True
                 break
-            # 全部暂停，表示全部满一年，可以进行下一轮训练
-            if pause_counter == glo.agent_num:
-                return True
     print("进程执行完毕")
-    return False
 
 
 def run_model():
@@ -75,6 +67,7 @@ def run_model():
     global time_stamp
     global multi_step
     global multi_episode
+    global flag_lock
     # 建立经验池
     ep = Experience_pool()
     # 载入经验池
@@ -82,7 +75,8 @@ def run_model():
     print("建立模型")
     # 建立模型
     for i in range(glo.agent_num):
-        thread_list[i] = ACModel(i, model, thread_flag, ep, time_stamp, multi_episode, multi_step)
+        thread_list[i] = ACModel(i, model, thread_flag, ep, time_stamp, multi_episode, multi_step, glo.data, glo.date,
+                                 glo.dict,flag_lock)
     execute_model('i')
     for episode in range(glo.train_times):
         multi_episode.value = episode
@@ -97,29 +91,23 @@ def run_model():
             print("     times:" + str(t))
             print("运行模型")
             flag = False
-            pause = False
             while len(ep.exp_pool) <= glo.experience_pool_size:
-                pause = False
                 if len(ep.exp_pool) < glo.experience_pool_size:
                     # 观察环境模式
                     flag = True
                     # 连续运行
                     print("观察模式，经验池大小：" + str(len(ep.exp_pool)))
-                if execute_model('r'):
-                    pause = True
-
+                execute_model('r')
                 if len(ep.exp_pool) == glo.experience_pool_size:
                     if flag:
                         print("观察完成,经验池大小：" + str(len(ep.exp_pool)))
                         save_experience_pool(ep)
                     break
-            if pause:
-                break
+
             if sys_model.__contains__("train") or sys_model.__contains__("both"):
                 # 执行训练
                 print("执行训练")
-                if execute_model('t'):
-                    break
+                execute_model('t')
         # 保存经验池
         if episode % (glo.train_times / glo.save_exp_frequency) == 0 and episode != 0:
             save_experience_pool(ep)
@@ -145,10 +133,11 @@ if __name__ == '__main__':
     model = multiprocessing.Value('u', 'i')
     multi_episode = multiprocessing.Value('L', 0)
     multi_step = multiprocessing.Value('L', 0)
-
+    flag_lock=multiprocessing.Lock()
     thread_flag = multiprocessing.Manager().list(range(glo.agent_num))
     thread_list = [None for i in range(glo.agent_num)]
     time_stamp = multiprocessing.Value('L', 0)
+    multiprocessing.freeze_support()
     # sys_model = input("请输入运行模式：run\\train\\both\n")
     sys_model = 'both'
     glo.init()

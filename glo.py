@@ -1,7 +1,6 @@
 import random
 import pandas as pd
 import numpy as np
-
 count = 32
 frequency = '1d'
 day = 5
@@ -11,7 +10,7 @@ train_times = 100
 train_step = 600
 gamma = 0.4
 mini_batch_size = 64
-experience_pool_size = 50000
+experience_pool_size = 10000
 tau = 0.001
 stock_state_size = 6
 agent_state_size = 3
