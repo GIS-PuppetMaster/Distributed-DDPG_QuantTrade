@@ -22,7 +22,7 @@ stock_state_size = 6
 agent_state_size = 3
 action_size = 2
 epsilon = 0.1
-agent_num = 1
+agent_num = 8
 actor_learning_rate = 0.0001
 critic_learning_rate = 0.00001
 # 每轮训练画多少次图像

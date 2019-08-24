@@ -191,7 +191,7 @@ class Env:
         price = self.price
         # 钱数-=每股价格*100*交易手数
         self.money = self.money - price * 100 * quant - abs(price * 100 * quant * 1.25 / 1000)
-        if quant!=0:
+        if quant != 0:
             # 记录交易记录
             self.stock_value.append([price, quant])
         """
