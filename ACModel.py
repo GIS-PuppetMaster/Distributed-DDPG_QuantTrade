@@ -146,7 +146,7 @@ class ACModel(Process):
             self.pause = True
             # self.stock_state, self.agent_state = self.env.get_state()
         # 连续15轮训练交易次数小于20次则重置网络
-        if self.step.value == glo.train_step - 1 or (self.env.start_date - self.env.gdate.get_date()).days == 365:
+        if self.step.value == glo.train_step - 1 or (self.env.start_date - self.env.gdate.get_date()).days >= 365:
             if len(self.env.stock_value) <= 20:
                 self.reset_counter += 1
             else:
@@ -225,15 +225,16 @@ class ACModel(Process):
         profit_list = env.profit_list
         reference_list = env.reference_list
         price_list = env.price_list
-        quant_list = np.array(env.stock_value)[:, 1]
+        quant_list = np.array(env.stock_value)[1:, 1]
         amount_list = []
         amount = env.stock_value[0][1]
         for i in range(len(env.stock_value)):
             if i == 0:
                 continue
-            l = env.stock_value[i]
-            amount += l[1]
-            amount_list.append(amount)
+            else:
+                l = env.stock_value[i]
+                amount += l[1]
+                amount_list.append(amount)
         dis = "运行结果/Agent编号" + str(index)
         path = dis + "/episode_" + str(episode) + ".html"
         # 目录不存在则创建目录

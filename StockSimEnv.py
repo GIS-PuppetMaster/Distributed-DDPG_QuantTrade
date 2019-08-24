@@ -103,7 +103,7 @@ class Env:
         stock_state = []
         # 获取前5天的数据
         for i in range(0, glo.day):
-            day_state = []
+            # day_state = []
             """
             # 获取前count分钟的数据
             for j in range(0, glo.count):
@@ -187,10 +187,8 @@ class Env:
                 quant = int(action_0 * amount)
                 if quant == 0 and action_0 != 0:
                     flag = True
-        # 获取当前价格
-        price = self.price
         # 钱数-=每股价格*100*交易手数
-        self.money = self.money - price * 100 * quant - abs(price * 100 * quant * 1.25 / 1000)
+        self.money = self.money - self.price * 100 * quant - abs(self.price * 100 * quant * 1.25 / 1000)
         """
         print("日期:" + str(self.gdate.get_date()))
         print("action:" + str(action))
@@ -205,11 +203,11 @@ class Env:
         else:
             next_date, over_flow = self.gdate.next_day()
         # 切换到下一天的话记录绘图信息
-        if (next_date - now_date).days >= 1:
+        if next_date.day != now_date.day or next_date.month != now_date.month or next_date.year != now_date.year:
             # 记录交易日期
             self.time_list.append(now_date)
             # 记录交易记录
-            self.stock_value.append([price, quant])
+            self.stock_value.append([self.price, quant])
             # 记录策略利率和基准利率
             self.profit_list.append(
                 (self.get_stock_total_value(self.price) + self.money - self.ori_money - self.ori_value) / (
@@ -218,8 +216,6 @@ class Env:
                 ((self.price * 100 * self.stock_value[0][1] - self.ori_value) / (self.ori_value + self.ori_money)))
             # 记录股价
             self.price_list.append(self.price)
-
-
 
         """计算奖励"""
         # 计算下一时刻期望毛利润
@@ -240,8 +236,8 @@ class Env:
             # 惩罚
             reward -= abs(action_0) * 0.5
         # 交易历史日期不为空且当前距离上一次交易超过5天 或者 当前交易历史日期为空且当前日期距离开始日期超过5天
-        if (len(self.time_list) != 0 and (now_date - self.time_list[-1]).days >= 5) or (
-                len(self.time_list) == 0 and (now_date - self.start_date).days >= 5):
+        if (len(self.time_list) != 0 and (now_date.day - self.time_list[-1].day) >= 5) or (
+                len(self.time_list) == 0 and (now_date.day - self.start_date.day) >= 5):
             # 惩罚
             reward -= 50
         """"""
@@ -258,6 +254,7 @@ class Env:
             reward -= abs(action[1]) * 10
         # 交易了返回下一天的状态，否则返回下一个frequency的状态
         state = self.get_state(date=next_date)
-        if self.gdate.index == len(self.gdate.date_list) - 1 or over_flow or (next_date - self.start_date).days >= 365:
+        if self.gdate.index == len(self.gdate.date_list) - 1 or over_flow or (
+                next_date - self.start_date).days >= 365:
             reward = None
         return state[0], state[1], reward
