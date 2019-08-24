@@ -191,9 +191,6 @@ class Env:
         price = self.price
         # 钱数-=每股价格*100*交易手数
         self.money = self.money - price * 100 * quant - abs(price * 100 * quant * 1.25 / 1000)
-        if quant != 0:
-            # 记录交易记录
-            self.stock_value.append([price, quant])
         """
         print("日期:" + str(self.gdate.get_date()))
         print("action:" + str(action))
@@ -208,9 +205,11 @@ class Env:
         else:
             next_date, over_flow = self.gdate.next_day()
         # 切换到下一天的话记录绘图信息
-        if (next_date - now_date).days >= 1 or quant != 0:
+        if (next_date - now_date).days >= 1:
             # 记录交易日期
             self.time_list.append(now_date)
+            # 记录交易记录
+            self.stock_value.append([price, quant])
             # 记录策略利率和基准利率
             self.profit_list.append(
                 (self.get_stock_total_value(self.price) + self.money - self.ori_money - self.ori_value) / (
@@ -219,6 +218,8 @@ class Env:
                 ((self.price * 100 * self.stock_value[0][1] - self.ori_value) / (self.ori_value + self.ori_money)))
             # 记录股价
             self.price_list.append(self.price)
+
+
 
         """计算奖励"""
         # 计算下一时刻期望毛利润

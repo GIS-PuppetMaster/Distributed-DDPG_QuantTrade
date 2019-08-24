@@ -220,7 +220,7 @@ class ACModel(Process):
                 self.thread_flag[self.index] = 's'
                 self.lock.release()
 
-    def draw_sim_plot(self, env, i, episode):
+    def draw_sim_plot(self, env, index, episode):
         time_list = env.time_list
         profit_list = env.profit_list
         reference_list = env.reference_list
@@ -234,7 +234,7 @@ class ACModel(Process):
             l = env.stock_value[i]
             amount += l[1]
             amount_list.append(amount)
-        dis = "运行结果/Agent编号" + str(i)
+        dis = "运行结果/Agent编号" + str(index)
         path = dis + "/episode_" + str(episode) + ".html"
         # 目录不存在则创建目录
         if not os.path.exists(dis):
