@@ -3,10 +3,14 @@ import pandas as pd
 import numpy as np
 
 count = 32
-# 必须为min
-frequency = '30m'
+"""
+必须为min!!!!!!!
+"""
+frequency = '30'+'m'
+""""""
 day = 5
-stock_code_list = ['000517.XSHE', '000938.XSHE', '600094.XSHG', '600519.XSHG', '601318.XSHG']
+#, '000938.XSHE', '600094.XSHG', '600519.XSHG', '601318.XSHG'
+stock_code_list = ['000517.XSHE']
 # DDPG超参数
 train_times = 1000
 train_step = 1000
@@ -18,7 +22,7 @@ stock_state_size = 6
 agent_state_size = 3
 action_size = 2
 epsilon = 0.1
-agent_num = 8
+agent_num = 1
 actor_learning_rate = 0.0001
 critic_learning_rate = 0.00001
 # 每轮训练画多少次图像

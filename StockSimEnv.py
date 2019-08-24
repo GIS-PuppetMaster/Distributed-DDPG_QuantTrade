@@ -118,7 +118,7 @@ class Env:
             # 前一天
             self.temp_date.last_day()
         # 标准化
-        #stock_state = MinMaxScaler().fit_transform(scale(stock_state, axis=0))
+        # stock_state = MinMaxScaler().fit_transform(scale(stock_state, axis=0))
         stock_state = StandardScaler().fit_transform(stock_state)
         # 生成agent状态
         agent_state = [self.money] + [self.get_stock_total_value(self.price)] + [
@@ -191,9 +191,8 @@ class Env:
         price = self.price
         # 钱数-=每股价格*100*交易手数
         self.money = self.money - price * 100 * quant - abs(price * 100 * quant * 1.25 / 1000)
-        if quant != 0:
-            # 如果实际交易了则记录
-            # [股价,手数]
+        if quant!=0:
+            # 记录交易记录
             self.stock_value.append([price, quant])
         """
         print("日期:" + str(self.gdate.get_date()))
@@ -207,8 +206,11 @@ class Env:
             next_date, over_flow = self.gdate.next_date()
         # 如果交易了则跳到下一天
         else:
+            next_date, over_flow = self.gdate.next_day()
+        # 切换到下一天的话记录绘图信息
+        if (next_date - now_date).days >= 1 or quant != 0:
             # 记录交易日期
-            self.time_list.append(self.gdate.get_date())
+            self.time_list.append(now_date)
             # 记录策略利率和基准利率
             self.profit_list.append(
                 (self.get_stock_total_value(self.price) + self.money - self.ori_money - self.ori_value) / (
@@ -217,7 +219,7 @@ class Env:
                 ((self.price * 100 * self.stock_value[0][1] - self.ori_value) / (self.ori_value + self.ori_money)))
             # 记录股价
             self.price_list.append(self.price)
-            next_date, over_flow = self.gdate.next_day()
+
         """计算奖励"""
         # 计算下一时刻期望毛利润
         next_date_profit = self.money + self.get_stock_total_value(self.get_stock_price(next_date))
@@ -247,12 +249,12 @@ class Env:
 
         if flag:
             # 惩罚
-            reward -= abs(action_0)*5
+            reward -= abs(action_0) * 5
         # 交易历史日期不为空且当前距离上一次交易超过5天 或者 当前交易历史日期为空且当前日期距离开始日期超过5天
         if (len(self.time_list) != 0 and (now_date - self.time_list[-1]).days >= 5) or (
                 len(self.time_list) == 0 and (now_date - self.start_date).days >= 5):
             # 惩罚
-            reward -= abs(action[1])*10
+            reward -= abs(action[1]) * 10
         # 交易了返回下一天的状态，否则返回下一个frequency的状态
         state = self.get_state(date=next_date)
         if self.gdate.index == len(self.gdate.date_list) - 1 or over_flow or (next_date - self.start_date).days >= 365:

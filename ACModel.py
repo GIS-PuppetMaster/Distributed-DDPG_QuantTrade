@@ -146,14 +146,16 @@ class ACModel(Process):
             self.pause = True
             # self.stock_state, self.agent_state = self.env.get_state()
         # 连续15轮训练交易次数小于20次则重置网络
-        if self.step.value == glo.train_step - 1 and len(self.env.stock_value) <= 20:
-            self.reset_counter += 1
-        elif self.step.value == glo.train_step - 1:
-            self.reset_counter = 0
+        if self.step.value == glo.train_step - 1 or (self.env.start_date - self.env.gdate.get_date()).days == 365:
+            if len(self.env.stock_value) <= 20:
+                self.reset_counter += 1
+            else:
+                self.reset_counter = 0
         if self.reset_counter == 15:
             print("编号" + str(self.index) + "重置网络")
             self.actor = ActorNetwork(self.sess)
             self.critic = CriticNetwork(self.sess)
+            self.reset_counter = 0
         if (self.env.start_date - self.env.gdate.get_date()).days >= 365:
             self.pause = True
 
@@ -181,7 +183,7 @@ class ACModel(Process):
                 if not self.pause:
                     self.run_nn()
                 else:
-                    print("编号:"+str(self.index)+" pause")
+                    print("编号:" + str(self.index) + " pause")
                 self.lock.acquire()
                 self.last_stamp = int(self.time_stamp.value)
                 if not self.pause:
@@ -194,7 +196,7 @@ class ACModel(Process):
                 if not self.pause:
                     self.train_nn()
                 else:
-                    print("编号:"+str(self.index)+" pause")
+                    print("编号:" + str(self.index) + " pause")
                 self.lock.acquire()
                 self.last_stamp = int(self.time_stamp.value)
                 if not self.pause:
@@ -226,7 +228,10 @@ class ACModel(Process):
         quant_list = np.array(env.stock_value)[:, 1]
         amount_list = []
         amount = env.stock_value[0][1]
-        for l in env.stock_value:
+        for i in range(len(env.stock_value)):
+            if i == 0:
+                continue
+            l = env.stock_value[i]
             amount += l[1]
             amount_list.append(amount)
         dis = "运行结果/Agent编号" + str(i)
