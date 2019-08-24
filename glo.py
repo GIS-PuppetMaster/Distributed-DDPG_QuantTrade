@@ -3,13 +3,14 @@ import pandas as pd
 import numpy as np
 
 count = 32
-frequency = '1d'
+# 必须为min
+frequency = '30m'
 day = 5
 stock_code_list = ['000517.XSHE', '000938.XSHE', '600094.XSHG', '600519.XSHG', '601318.XSHG']
 # DDPG超参数
-train_times = 100
-train_step = 600
-gamma = 0.4
+train_times = 1000
+train_step = 1000
+gamma = 0.99
 mini_batch_size = 64
 experience_pool_size = 10000
 tau = 0.001
@@ -18,8 +19,8 @@ agent_state_size = 3
 action_size = 2
 epsilon = 0.1
 agent_num = 8
-actor_learning_rate = 0.001
-critic_learning_rate = 0.0001
+actor_learning_rate = 0.0001
+critic_learning_rate = 0.00001
 # 每轮训练画多少次图像
 draw_frequency = 10
 # 一共保存多少次经验

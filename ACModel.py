@@ -8,14 +8,15 @@ import numpy as np
 import glo
 import plotly as py
 import plotly.graph_objs as go
+import random
 import sys
 from datetime import *
 
 
 class ACModel(Process):
-    def __init__(self, index, mode, thread_flag, ep, time_stamp, episode, step, _data, _date, _dict, lock):
+    def __init__(self, index, mode, thread_flag, ep, time_stamp, episode, step, _data, _date, _dict, lock, obs):
         self.index = index
-        self.env = Env()
+        self.env = Env(stock_code='000517.XSHE')
         self.sess = None
         self.actor = None
         self.critic = None
@@ -31,11 +32,14 @@ class ACModel(Process):
         self.date = _date
         self.dict = _dict
         self.lock = lock
+        self.obs = obs
+        self.reset_counter = 0
         self.step_loss_list = []
+        self.pause = False
         Process.__init__(self)
 
     def init_env(self):
-        self.env = Env()
+        self.env = Env(stock_code='000517.XSHE')
 
     def init_nn(self):
         import tensorflow as tf
@@ -72,51 +76,57 @@ class ACModel(Process):
         """
 
     def train_nn(self):
-        print("编号" + str(self.index) + "获取经验包")
+        # print("编号" + str(self.index) + "获取经验包")
         stock_state_, agent_state_, action_, reward_, next_stock_state_, next_agent_state_ = self.ep.get_info_from_experience_list(
             self.ep.get_experience_batch())
-        print("编号" + str(self.index) + "生成yi")
+        # print("编号" + str(self.index) + "生成yi")
         yi = (np.array(reward_) + glo.gamma * np.array(
             self.critic.target_model.predict([next_stock_state_, next_agent_state_, self.actor.target_model.predict(
                 [next_stock_state_, next_agent_state_])]))).tolist()
         # 开始训练
-        print("编号" + str(self.index) + "开始训练critic")
+        # print("编号" + str(self.index) + "开始训练critic")
         step_loss = self.critic.model.train_on_batch([stock_state_, agent_state_, action_], [yi])
         self.step_loss_list.append(step_loss)
-        print("编号" + str(self.index) + "生成a_for_grad")
+        # print("编号" + str(self.index) + "生成a_for_grad")
         a_for_grad = self.actor.model.predict([stock_state_, agent_state_])
-        print("编号" + str(self.index) + "生成梯度")
+        # print("编号" + str(self.index) + "生成梯度")
         grads = self.critic.gradients(stock_state_, agent_state_, a_for_grad)
         # print("编号" + str(self.index) + "梯度\n" + str(grads))
-        print("编号" + str(self.index) + "训练actor")
+        # print("编号" + str(self.index) + "训练actor")
         self.actor.train(stock_state_, agent_state_, grads)
-        print("编号" + str(self.index) + "更新target")
+        # print("编号" + str(self.index) + "更新target")
         # 更新参数
         self.actor.update_target()
         self.critic.update_target()
 
     def run_nn(self):
         # 预测前先向网络添加噪声
-        print("编号" + str(self.index) + "添加噪声")
-        self.actor.apply_noise()
-        print("编号" + str(self.index) + "预测动作")
-        action = self.actor.model.predict([self.stock_state, self.agent_state])[0]
-        # TODO:完成ES噪声算法后删除
-        print("编号" + str(self.index) + "添加噪声")
-        action += np.random.randn(2, ) * 0.5
-        if action[0] > 1:
-            action[0] = 1
-        if action[0] < -1:
-            action[0] = -1
-        if action[1] > 1:
-            action[1] = 1
-        if action[1] < -1:
-            action[1] = -1
-        print("编号" + str(self.index) + "进行交易")
+        # print("编号" + str(self.index) + "添加噪声")
+        if self.obs.value == 'f':
+            self.actor.apply_noise()
+            # print("编号" + str(self.index) + "预测动作")
+            action = self.actor.model.predict([self.stock_state, self.agent_state])[0]
+            # print("编号" + str(self.index) + "action:" + str(action))
+            # TODO:完成ES噪声算法后删除
+            # print("编号" + str(self.index) + "添加噪声")
+            action += np.random.randn(2, ) * 0.01
+            if action[0] > 1:
+                action[0] = 1
+            if action[0] < -1:
+                action[0] = -1
+            if action[1] > 1:
+                action[1] = 1
+            if action[1] < -1:
+                action[1] = -1
+            # print("编号" + str(self.index) + "action_noise:" + str(action))
+        else:
+            action = np.array([random.uniform(-1, 1), random.uniform(-1, 1)])
+        # print("编号" + str(self.index) + "进行交易")
         next_stock_state, next_agent_state, reward = self.env.trade(action)
+        # print("编号" + str(self.index) + "reward:" + str(reward))
         if reward is not None:
             # 解决numpy.float32没有__dict__方法，使得经验无法使用Json.dump的问题
-            print("编号" + str(self.index) + "append经验")
+            # print("编号" + str(self.index) + "append经验")
             a = []
             for i in range(glo.action_size):
                 a.append(action[i].item())
@@ -126,13 +136,26 @@ class ACModel(Process):
             self.stock_state = next_stock_state
             self.agent_state = next_agent_state
             # 绘图
-            if (self.step.value % (glo.train_step / glo.draw_frequency) == 0 and self.step.value != 0) or (
-                    self.env.gdate.date - self.env.start_date).days % 60 == 0:
-                print("编号" + str(self.index) + "绘图")
+            if self.step.value == glo.train_step - 1:
+                # print("编号" + str(self.index) + "绘图")
                 self.draw_sim_plot(self.env, self.index, self.episode.value)
         else:
-            self.env.reset()
-            self.stock_state, self.agent_state = self.env.get_state()
+            # self.env.reset()
+            print("编号:" + str(self.index) + " 进入pause模式")
+            self.draw_sim_plot(self.env, self.index, self.episode.value)
+            self.pause = True
+            # self.stock_state, self.agent_state = self.env.get_state()
+        # 连续15轮训练交易次数小于20次则重置网络
+        if self.step.value == glo.train_step - 1 and len(self.env.stock_value) <= 20:
+            self.reset_counter += 1
+        elif self.step.value == glo.train_step - 1:
+            self.reset_counter = 0
+        if self.reset_counter == 15:
+            print("编号" + str(self.index) + "重置网络")
+            self.actor = ActorNetwork(self.sess)
+            self.critic = CriticNetwork(self.sess)
+        if (self.env.start_date - self.env.gdate.get_date()).days >= 365:
+            self.pause = True
 
     def run(self):
         glo.data = self.data
@@ -155,17 +178,29 @@ class ACModel(Process):
                 self.lock.release()
                 # print("编号" + str(self.index) + "完成模型初始化")
             elif self.mode.value == 'r' and self.time_stamp.value != self.last_stamp:
-                self.run_nn()
+                if not self.pause:
+                    self.run_nn()
+                else:
+                    print("编号:"+str(self.index)+" pause")
                 self.lock.acquire()
                 self.last_stamp = int(self.time_stamp.value)
-                self.thread_flag[self.index] = 'r'
+                if not self.pause:
+                    self.thread_flag[self.index] = 'r'
+                else:
+                    self.thread_flag[self.index] = 'p'
                 self.lock.release()
                 # print("编号" + str(self.index) + "完成运行")
             elif self.mode.value == 't' and self.time_stamp.value != self.last_stamp:
-                self.train_nn()
+                if not self.pause:
+                    self.train_nn()
+                else:
+                    print("编号:"+str(self.index)+" pause")
                 self.lock.acquire()
                 self.last_stamp = int(self.time_stamp.value)
-                self.thread_flag[self.index] = 't'
+                if not self.pause:
+                    self.thread_flag[self.index] = 't'
+                else:
+                    self.thread_flag[self.index] = 'p'
                 self.lock.release()
                 # print("编号" + str(self.index) + "完成训练")
             elif self.mode.value == 'v' and self.time_stamp.value != self.last_stamp:
@@ -174,6 +209,8 @@ class ACModel(Process):
                 self.last_stamp = int(self.time_stamp.value)
                 self.thread_flag[self.index] = 'v'
                 self.lock.release()
+                # 重置环境后取消pause模式
+                self.pause = False
             elif self.mode.value == 's' and self.time_stamp.value != self.last_stamp:
                 self.save_weights()
                 self.lock.acquire()
@@ -246,7 +283,7 @@ class ACModel(Process):
                                       decreasing=dict(line=dict(color='#00CCFF')))
         """
         py.offline.plot({
-            "data": [profit_scatter, reference_scatter, price_scatter, trade_bar,
+            "data": [price_scatter, profit_scatter, reference_scatter, trade_bar,
                      amount_scatter],
             "layout": go.Layout(
                 title=env.stock_code + " 编号" + str(self.index) + " 回测结果" + "     初始资金：" + str(
@@ -285,7 +322,6 @@ class ACModel(Process):
                 plot_bgcolor='#FFFFFF'
             )
         }, auto_open=False, filename=path)
-
 
     def save_weights(self):
         dis = "训练历史权重/Agent编号" + str(self.index)

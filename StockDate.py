@@ -32,8 +32,9 @@ class StockDate:
 
     def next_date(self):
         frequency = int(glo.frequency[:-1])
-        self.date = datetime.strptime(self.date_list[self.index + frequency], "%Y-%m-%d %H:%M:%S")
-        self.index += frequency
+        next_index = self.index + frequency
+        self.date = datetime.strptime(self.date_list[next_index], "%Y-%m-%d %H:%M:%S")
+        self.index = next_index
         # 如果下一步溢出则返回None
         if self.index + frequency >= len(self.date_list):
             return self.date, True

@@ -24,7 +24,7 @@ class ActorNetwork(object):
         global_step = tf.Variable(0, trainable=False)
         learn_rate = tf.train.exponential_decay(self.LEARNING_RATE, global_step, 1000, 0.9)
         self.optimize = tf.train.AdamOptimizer(learn_rate).apply_gradients(grad, global_step=global_step)
-        self.sess.run(tf.initialize_all_variables())
+        self.sess.run(tf.global_variables_initializer())
 
     def train(self, stock_state, agent_state, action_grads):
         self.sess.run(self.optimize, feed_dict={
@@ -57,6 +57,15 @@ class ActorNetwork(object):
     def apply_noise(self):
         pass
         """
+        # 会导致train后权重为Nan
+        import numpy as np
+        weights = self.model.get_weights()
+        for i in range(len(weights)):
+            weights[i] += np.random.standard_normal(weights[i].shape)*0.05
+            # weights[i] += np.zeros(weights[i].shape)
+        self.model.set_weights(weights)
+        """
+        """
         # 采用ES算法自适应高斯噪声
         weights = self.model.get_weights()
         length = len(weights)
@@ -73,7 +82,8 @@ class ActorNetwork(object):
 
     def build_actor_network(self):
         from keras.models import Model
-        from keras.layers import Input, Conv1D, Activation, BatchNormalization, Dense, Concatenate, Flatten,regularizers,Reshape,LSTM
+        from keras.layers import Input, Conv1D, Activation, BatchNormalization, Dense, Concatenate, Flatten, \
+            regularizers, Reshape, LSTM
         from keras.utils import plot_model
         """
            输入：state(stock,agent)
@@ -81,35 +91,34 @@ class ActorNetwork(object):
            loss：max(q)，即-tf.reduce_mean(q)
            :return:actor_net_model,weights,stock_state,agent_state
            """
-        input_stock_state = Input(shape=(glo.count, glo.day, glo.stock_state_size))
+        input_stock_state = Input(shape=(glo.day, glo.stock_state_size))
         # input_stock_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_stock_state)
         input_agent_state = Input(shape=(glo.agent_state_size,))
         # input_agent_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_agent_state)
+        """
         # 首先把日期时序和特征压缩
         x_stock_state = Reshape((glo.count, glo.day * glo.stock_state_size))(input_stock_state)
         # 对分钟时序进行卷积
-        x_stock_state = Conv1D(filters=glo.day*glo.stock_state_size, kernel_size=32, padding='valid')(x_stock_state)
+        x_stock_state = Conv1D(filters=glo.day*glo.stock_state_size, kernel_size=glo.count, padding='valid')(x_stock_state)
         x_stock_state = BatchNormalization(axis=2, epsilon=1e-4, scale=True, center=True)(x_stock_state)
         x_stock_state = Activation('tanh')(x_stock_state)
         # 展开日期时序和特征
         x_stock_state = Reshape((glo.day, glo.stock_state_size))(x_stock_state)
-        x_stock_state = LSTM(16, activation='tanh', recurrent_activation='tanh',kernel_regularizer=regularizers.l2(0.01), unroll=True)(x_stock_state)
-        # x_stock_state = Flatten()(x_stock_state)
         """
-        dense01 = Dense(16, kernel_regularizer=regularizers.l2(0.01))(x_stock_state)
+        x_stock_state = LSTM(64, activation='tanh', recurrent_activation='tanh',
+                             kernel_regularizer=regularizers.l2(0.01), unroll=True)(input_stock_state)
+        # x_stock_state = Flatten()(x_stock_state)
+        dense01 = Dense(32, kernel_regularizer=regularizers.l2(0.01))(x_stock_state)
         dense01 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense01)
         dense01 = Activation('tanh')(dense01)
         dense01 = Dense(8, kernel_regularizer=regularizers.l2(0.01))(dense01)
         dense01 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense01)
         dense01 = Activation('tanh')(dense01)
-        """
-        merge_layer = Concatenate()([x_stock_state, input_agent_state])
-        """
+        merge_layer = Concatenate()([dense01, input_agent_state])
         dense02 = Dense(32)(merge_layer)
         dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
         dense02 = Activation('tanh')(dense02)
-        """
-        dense02 = Dense(32, kernel_regularizer=regularizers.l2(0.01))(merge_layer)
+        dense02 = Dense(32, kernel_regularizer=regularizers.l2(0.01))(dense02)
         dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
         dense02 = Activation('tanh')(dense02)
         dense02 = Dense(8, kernel_regularizer=regularizers.l2(0.01))(dense02)
