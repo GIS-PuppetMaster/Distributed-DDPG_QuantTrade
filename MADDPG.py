@@ -46,12 +46,14 @@ def execute_model(m):
     flag = True
     start_time = datetime.now()
     while flag:
+        """
         if (datetime.now() - start_time).seconds >= 120:
             print("threadflag:" + str(thread_flag))
             print("time_stamp:" + str(time_stamp.value))
             for thread in thread_list:
                 thread.terminate()
             os._exit(1)
+        """
         flag = False
         # print(str(thread_flag))
         pause_counter = 0
@@ -86,7 +88,7 @@ def run_model():
     # 建立模型
     for i in range(glo.agent_num):
         thread_list[i] = ACModel(i, model, thread_flag, ep, time_stamp, multi_episode, multi_step, glo.data, glo.date,
-                                 glo.dict, flag_lock, obs)
+                                 glo.dict, glo.scaler, flag_lock, obs)
         # thread_list[i].daemon=True
     execute_model('i')
     for episode in range(glo.train_times):

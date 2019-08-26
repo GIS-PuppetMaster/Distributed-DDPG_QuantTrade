@@ -14,9 +14,10 @@ from datetime import *
 
 
 class ACModel(Process):
-    def __init__(self, index, mode, thread_flag, ep, time_stamp, episode, step, _data, _date, _dict, lock, obs):
+    def __init__(self, index, mode, thread_flag, ep, time_stamp, episode, step, _data, _date, _dict, _scaler, lock,
+                 obs):
         self.index = index
-        self.env = Env(stock_code='000517.XSHE')
+        self.env = Env(stock_code='000517.XSHE', scaler=_scaler)
         self.sess = None
         self.actor = None
         self.critic = None
@@ -35,11 +36,13 @@ class ACModel(Process):
         self.obs = obs
         self.reset_counter = 0
         self.step_loss_list = []
+        self.reward_list = []
         self.pause = False
+        self.scaler = _scaler
         Process.__init__(self)
 
     def init_env(self):
-        self.env = Env(stock_code='000517.XSHE')
+        self.env = Env(stock_code='000517.XSHE', scaler=self.scaler)
 
     def init_nn(self):
         import tensorflow as tf
@@ -51,19 +54,19 @@ class ACModel(Process):
         index = self.index
         self.actor = ActorNetwork(sess)
         self.critic = CriticNetwork(sess)
-        path = "训练历史权重/Agent编号" + str(index) + "/main_actor_weights.h5"
+        path = "最新训练权重/Agent编号" + str(index) + "/main_actor_weights.h5"
         if os.path.exists(path):
             print("载入权重main_actor_weights.h5")
             self.actor.model.load_weights(path)
-        path = "训练历史权重/Agent编号" + str(index) + "/target_actor_weights.h5"
+        path = "最新训练权重/Agent编号" + str(index) + "/target_actor_weights.h5"
         if os.path.exists(path):
             print("载入权重target_actor_weights.h5")
             self.actor.target_model.load_weights(path)
-        path = "训练历史权重/Agent编号" + str(index) + "/main_critic_weights.h5"
+        path = "最新训练权重/Agent编号" + str(index) + "/main_critic_weights.h5"
         if os.path.exists(path):
             print("载入权重main_critic_weights.h5")
             self.critic.model.load_weights(path)
-        path = "训练历史权重/Agent编号" + str(index) + "/target_critic_weights.h5"
+        path = "最新训练权重/Agent编号" + str(index) + "/target_critic_weights.h5"
         if os.path.exists(path):
             print("载入权重target_critic_weights.h5")
             self.critic.target_model.load_weights(path)
@@ -106,7 +109,7 @@ class ACModel(Process):
             self.actor.apply_noise()
             # print("编号" + str(self.index) + "预测动作")
             action = self.actor.model.predict([self.stock_state, self.agent_state])[0]
-            # print("编号" + str(self.index) + "action:" + str(action))
+            print("编号" + str(self.index) + "action:" + str(action))
             # TODO:完成ES噪声算法后删除
             # print("编号" + str(self.index) + "添加噪声")
             action += np.random.randn(2, ) * 0.01
@@ -133,6 +136,7 @@ class ACModel(Process):
             experience = Experience(self.stock_state, self.agent_state, [a], [[float(str(reward))]], next_stock_state,
                                     next_agent_state)
             self.ep.append_experience(experience)
+            self.reward_list.append(reward)
             self.stock_state = next_stock_state
             self.agent_state = next_agent_state
             # 绘图
@@ -141,21 +145,26 @@ class ACModel(Process):
                 self.draw_sim_plot(self.env, self.index, self.episode.value)
         else:
             # self.env.reset()
-            print("编号:" + str(self.index) + " 进入pause模式")
+            # print("编号:" + str(self.index) + " 进入pause模式")
             self.draw_sim_plot(self.env, self.index, self.episode.value)
             self.pause = True
             # self.stock_state, self.agent_state = self.env.get_state()
         # 连续15轮训练交易次数小于20次则重置网络
-        if self.step.value == glo.train_step - 1 or (self.env.start_date - self.env.gdate.get_date()).days >= 365:
-            if len(self.env.stock_value) <= 20:
+        if self.step.value == glo.train_step - 1 or (self.env.start_date - self.env.gdate.get_date()).days == 365:
+            if len(self.env.stock_value) <= glo.reset_trigger:
                 self.reset_counter += 1
             else:
                 self.reset_counter = 0
-        if self.reset_counter == 15:
+        if self.reset_counter == glo.reset:
             print("编号" + str(self.index) + "重置网络")
             self.actor = ActorNetwork(self.sess)
             self.critic = CriticNetwork(self.sess)
             self.reset_counter = 0
+            dir = 'log/Agent编号' + str(self.index)
+            if not os.path.exists(dir):
+                os.makedirs(dir)
+            with open(dir + "/episode" + str(self.episode.value), "a") as f:
+                f.write("step:" + str(self.step.value) + "重置网络\n")
         if (self.env.start_date - self.env.gdate.get_date()).days >= 365:
             self.pause = True
 
@@ -183,6 +192,7 @@ class ACModel(Process):
                 if not self.pause:
                     self.run_nn()
                 else:
+                    pass
                     print("编号:" + str(self.index) + " pause")
                 self.lock.acquire()
                 self.last_stamp = int(self.time_stamp.value)
@@ -196,6 +206,7 @@ class ACModel(Process):
                 if not self.pause:
                     self.train_nn()
                 else:
+                    pass
                     print("编号:" + str(self.index) + " pause")
                 self.lock.acquire()
                 self.last_stamp = int(self.time_stamp.value)
@@ -235,7 +246,7 @@ class ACModel(Process):
                 l = env.stock_value[i]
                 amount += l[1]
                 amount_list.append(amount)
-        dis = "运行结果/Agent编号" + str(index)
+        dis = "E:/运行结果/Agent编号" + str(index)
         path = dis + "/episode_" + str(episode) + ".html"
         # 目录不存在则创建目录
         if not os.path.exists(dis):
@@ -289,7 +300,7 @@ class ACModel(Process):
                                       decreasing=dict(line=dict(color='#00CCFF')))
         """
         py.offline.plot({
-            "data": [price_scatter, profit_scatter, reference_scatter, trade_bar,
+            "data": [profit_scatter, reference_scatter, price_scatter, trade_bar,
                      amount_scatter],
             "layout": go.Layout(
                 title=env.stock_code + " 编号" + str(self.index) + " 回测结果" + "     初始资金：" + str(
@@ -328,9 +339,26 @@ class ACModel(Process):
                 plot_bgcolor='#FFFFFF'
             )
         }, auto_open=False, filename=path)
+        reward_scatter = go.Scatter(x=[i for i in range(len(self.reward_list))],
+                                  y=self.reward_list,
+                                  name='reward',
+                                  line=dict(color='orange'),
+                                  mode='lines',
+                                  opacity=1)
+        path = dis + "/reward.html"
+        py.offline.plot({
+            "data": [reward_scatter],
+            "layout": go.Layout(
+                title="reward 编号" + str(self.index),
+                xaxis=dict(title='训练次数', showgrid=False, zeroline=False),
+                yaxis=dict(title='reward', showgrid=False, zeroline=False),
+                paper_bgcolor='#FFFFFF',
+                plot_bgcolor='#FFFFFF'
+            )
+        }, auto_open=False, filename=path)
 
     def save_weights(self):
-        dis = "训练历史权重/Agent编号" + str(self.index)
+        dis = "最新训练权重/Agent编号" + str(self.index)
         # 目录不存在则创建目录
         if not os.path.exists(dis):
             os.makedirs(dis)
@@ -341,6 +369,11 @@ class ACModel(Process):
         self.critic.model.save_weights(dis + '/main_critic_weights.h5', overwrite=True)
         self.critic.target_model.save_weights(dis + '/target_critic_weights.h5', overwrite=True)
         # 保存历史权重
+        dis = "E:/训练历史权重/Agent编号" + str(self.index)
+        # 目录不存在则创建目录
+        if not os.path.exists(dis):
+            os.makedirs(dis)
+
         self.actor.model.save_weights(dis + '/' + str(self.episode.value) + '_main_actor_weights.h5', overwrite=True)
         self.actor.target_model.save_weights(dis + '/' + str(self.episode.value) + '_target_actor_weights.h5',
                                              overwrite=True)

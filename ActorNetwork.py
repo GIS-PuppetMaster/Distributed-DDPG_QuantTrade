@@ -43,6 +43,7 @@ class ActorNetwork(object):
     def f(self, w):
         temp_actor = deepcopy(self.model)
         temp_actor.set_weights(w)
+        # TODO 传入scaler
         env = Env()
         current_stock_state, current_agent_state = env.get_state()
         reward = 0
@@ -94,7 +95,7 @@ class ActorNetwork(object):
         input_stock_state = Input(shape=(glo.day, glo.stock_state_size))
         # input_stock_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_stock_state)
         input_agent_state = Input(shape=(glo.agent_state_size,))
-        # input_agent_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_agent_state)
+        input_agent_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_agent_state)
         """
         # 首先把日期时序和特征压缩
         x_stock_state = Reshape((glo.count, glo.day * glo.stock_state_size))(input_stock_state)
@@ -114,7 +115,7 @@ class ActorNetwork(object):
         dense01 = Dense(8, kernel_regularizer=regularizers.l2(0.01))(dense01)
         dense01 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense01)
         dense01 = Activation('tanh')(dense01)
-        merge_layer = Concatenate()([dense01, input_agent_state])
+        merge_layer = Concatenate()([dense01, input_agent_state_])
         dense02 = Dense(32)(merge_layer)
         dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
         dense02 = Activation('tanh')(dense02)
