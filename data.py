@@ -12,8 +12,21 @@ def download_data(env):
     raw = get_price(env.stock_code, start_date=datetime(2007, 1, 1, 0, 0, 0).strftime("%Y-%m-%d %H:%M:%S"),
                     end_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), frequency="1m", skip_paused=True)
     raw.to_csv('Data/' + env.stock_code.replace(".", "_") + ".csv")
+    raw = get_price(env.stock_code, start_date=datetime(2007, 1, 1).strftime("%Y-%m-%d"),
+                    end_date=datetime.now().strftime("%Y-%m-%d"), frequency="1d", skip_paused=True)
+    raw.to_csv('Data/' + env.stock_code.replace(".", "_") + "day.csv")
+    print("完成")
 
+def download_data(stock_code):
+    raw = get_price(stock_code, start_date=datetime(2007, 1, 1, 0, 0, 0).strftime("%Y-%m-%d %H:%M:%S"),
+                    end_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"), frequency="1m", skip_paused=True)
+    raw.to_csv('Data/' + stock_code.replace(".", "_") + ".csv")
+    raw = get_price(stock_code, start_date=datetime(2007, 1, 1).strftime("%Y-%m-%d"),
+                    end_date=datetime.now().strftime("%Y-%m-%d"), frequency="1d", skip_paused=True)
+    raw.to_csv('Data/' + stock_code.replace(".", "_") + "day.csv")
+    print("完成")
 
+download_data("601318.XSHG")
 """
 j = np.array(raw)[..., [0, 1, 2, 3]].transpose().tolist()
 with open('Data/'+glo.stock_code.replace(".", "_") + ".json", "w") as f:

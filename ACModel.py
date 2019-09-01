@@ -14,16 +14,16 @@ from datetime import *
 
 
 class ACModel(Process):
-    def __init__(self, index, mode, thread_flag, ep, time_stamp, episode, step, _data, _date, _dict, _scaler, lock,
-                 obs):
+    def __init__(self, index, mode, thread_flag, ep, time_stamp, episode, step, _data, _date, _dict, _day_data, _scaler,
+                 _min_scaler, lock, obs, sys_model):
         self.index = index
-        self.env = Env(stock_code='000517.XSHE', scaler=_scaler)
+        self.env = Env(stock_code='000517.XSHE', scaler=_scaler, min_scaler=_min_scaler)
         self.sess = None
         self.actor = None
         self.critic = None
         self.thread_flag = thread_flag
         self.ep = ep
-        self.stock_state, self.agent_state = self.env.get_state()
+        self.stock_state, self.agent_state, self.price_state = self.env.get_state()
         self.mode = mode
         self.episode = episode
         self.step = step
@@ -32,6 +32,7 @@ class ACModel(Process):
         self.data = _data
         self.date = _date
         self.dict = _dict
+        self.day_data = _day_data
         self.lock = lock
         self.obs = obs
         self.reset_counter = 0
@@ -39,10 +40,12 @@ class ACModel(Process):
         self.reward_list = []
         self.pause = False
         self.scaler = _scaler
+        self.min_scaler = _min_scaler
+        self.sys_model = sys_model
         Process.__init__(self)
 
     def init_env(self):
-        self.env = Env(stock_code='000517.XSHE', scaler=self.scaler)
+        self.env = Env(stock_code='000517.XSHE', scaler=self.scaler, min_scaler=self.min_scaler)
 
     def init_nn(self):
         import tensorflow as tf
@@ -80,23 +83,24 @@ class ACModel(Process):
 
     def train_nn(self):
         # print("编号" + str(self.index) + "获取经验包")
-        stock_state_, agent_state_, action_, reward_, next_stock_state_, next_agent_state_ = self.ep.get_info_from_experience_list(
+        stock_state_, agent_state_, price_state_, action_, reward_, next_stock_state_, next_agent_state_, next_price_state_ = self.ep.get_info_from_experience_list(
             self.ep.get_experience_batch())
         # print("编号" + str(self.index) + "生成yi")
         yi = (np.array(reward_) + glo.gamma * np.array(
-            self.critic.target_model.predict([next_stock_state_, next_agent_state_, self.actor.target_model.predict(
-                [next_stock_state_, next_agent_state_])]))).tolist()
+            self.critic.target_model.predict(
+                [next_stock_state_, next_agent_state_, price_state_, self.actor.target_model.predict(
+                    [next_stock_state_, next_agent_state_, next_price_state_])]))).tolist()
         # 开始训练
         # print("编号" + str(self.index) + "开始训练critic")
-        step_loss = self.critic.model.train_on_batch([stock_state_, agent_state_, action_], [yi])
+        step_loss = self.critic.model.train_on_batch([stock_state_, agent_state_, price_state_, action_], [yi])
         self.step_loss_list.append(step_loss)
         # print("编号" + str(self.index) + "生成a_for_grad")
-        a_for_grad = self.actor.model.predict([stock_state_, agent_state_])
+        a_for_grad = self.actor.model.predict([stock_state_, agent_state_, price_state_])
         # print("编号" + str(self.index) + "生成梯度")
-        grads = self.critic.gradients(stock_state_, agent_state_, a_for_grad)
+        grads = self.critic.gradients(stock_state_, agent_state_, price_state_, a_for_grad)
         # print("编号" + str(self.index) + "梯度\n" + str(grads))
         # print("编号" + str(self.index) + "训练actor")
-        self.actor.train(stock_state_, agent_state_, grads)
+        self.actor.train(stock_state_, agent_state_, price_state_, grads)
         # print("编号" + str(self.index) + "更新target")
         # 更新参数
         self.actor.update_target()
@@ -108,39 +112,46 @@ class ACModel(Process):
         if self.obs.value == 'f':
             self.actor.apply_noise()
             # print("编号" + str(self.index) + "预测动作")
-            action = self.actor.model.predict([self.stock_state, self.agent_state])[0]
+            action = self.actor.model.predict([self.stock_state, self.agent_state, self.price_state])[0]
             print("编号" + str(self.index) + "action:" + str(action))
             # TODO:完成ES噪声算法后删除
             # print("编号" + str(self.index) + "添加噪声")
-            action += np.random.randn(2, ) * 0.01
-            if action[0] > 1:
-                action[0] = 1
-            if action[0] < -1:
-                action[0] = -1
-            if action[1] > 1:
-                action[1] = 1
-            if action[1] < -1:
-                action[1] = -1
+            if self.sys_model!='run':
+                action += np.random.randn(2, ) * 0.01
+                if action[0] > 1:
+                    action[0] = 1
+                if action[0] < -1:
+                    action[0] = -1
+                if action[1] > 1:
+                    action[1] = 1
+                if action[1] < -1:
+                    action[1] = -1
             # print("编号" + str(self.index) + "action_noise:" + str(action))
         else:
             action = np.array([random.uniform(-1, 1), random.uniform(-1, 1)])
         # print("编号" + str(self.index) + "进行交易")
-        next_stock_state, next_agent_state, reward = self.env.trade(action)
+        next_stock_state, next_agent_state, next_price_state, reward = self.env.trade(action)
         # print("编号" + str(self.index) + "reward:" + str(reward))
         if reward is not None:
             # 解决numpy.float32没有__dict__方法，使得经验无法使用Json.dump的问题
             # print("编号" + str(self.index) + "append经验")
-            a = []
-            for i in range(glo.action_size):
-                a.append(action[i].item())
-            experience = Experience(self.stock_state, self.agent_state, [a], [[float(str(reward))]], next_stock_state,
-                                    next_agent_state)
-            self.ep.append_experience(experience)
-            self.reward_list.append(reward)
+            if self.sys_model!='run':
+                a = []
+                for i in range(glo.action_size):
+                    a.append(action[i].item())
+                experience = Experience(self.stock_state, self.agent_state, self.price_state, [a], [[float(str(reward))]],
+                                        next_stock_state,
+                                        next_agent_state, next_price_state)
+                self.ep.append_experience(experience)
+                if len(self.ep.exp_pool) >= glo.experience_pool_size:
+                    # 观察模式不记录loss
+                    self.reward_list.append(reward)
             self.stock_state = next_stock_state
             self.agent_state = next_agent_state
+            self.price_state = next_price_state
             # 绘图
-            if self.step.value == glo.train_step - 1:
+            if (self.step.value == glo.train_step - 1 and self.sys_model != 'run') or (
+                    self.sys_model == 'run' and self.step.value != 0 and self.step.value % 50 == 0):
                 # print("编号" + str(self.index) + "绘图")
                 self.draw_sim_plot(self.env, self.index, self.episode.value)
         else:
@@ -149,29 +160,32 @@ class ACModel(Process):
             self.draw_sim_plot(self.env, self.index, self.episode.value)
             self.pause = True
             # self.stock_state, self.agent_state = self.env.get_state()
-        # 连续15轮训练交易次数小于20次则重置网络
-        if self.step.value == glo.train_step - 1 or (self.env.start_date - self.env.gdate.get_date()).days == 365:
-            if len(self.env.stock_value) <= glo.reset_trigger:
-                self.reset_counter += 1
-            else:
+        if self.sys_model != 'run':
+            # 连续15轮训练交易次数小于20次则重置网络
+            if self.step.value == glo.train_step - 1 or (self.env.start_date - self.env.gdate.get_date()).days == 365:
+                if len(self.env.stock_value) <= glo.reset_trigger:
+                    self.reset_counter += 1
+                else:
+                    self.reset_counter = 0
+            if self.reset_counter >= glo.reset:
+                print("编号" + str(self.index) + "重置网络")
+                self.actor = ActorNetwork(self.sess)
+                self.critic = CriticNetwork(self.sess)
                 self.reset_counter = 0
-        if self.reset_counter == glo.reset:
-            print("编号" + str(self.index) + "重置网络")
-            self.actor = ActorNetwork(self.sess)
-            self.critic = CriticNetwork(self.sess)
-            self.reset_counter = 0
-            dir = 'log/Agent编号' + str(self.index)
-            if not os.path.exists(dir):
-                os.makedirs(dir)
-            with open(dir + "/episode" + str(self.episode.value), "a") as f:
-                f.write("step:" + str(self.step.value) + "重置网络\n")
-        if (self.env.start_date - self.env.gdate.get_date()).days >= 365:
-            self.pause = True
+                dir = 'log/Agent编号' + str(self.index)
+                if not os.path.exists(dir):
+                    os.makedirs(dir)
+                with open(dir + "/episode" + str(self.episode.value), "a") as f:
+                    f.write("step:" + str(self.step.value) + "重置网络\n")
+            if (self.env.gdate.get_date() - self.env.start_date).days >= 365:
+                self.draw_sim_plot(self.env, self.index, self.episode.value)
+                self.pause = True
 
     def run(self):
         glo.data = self.data
         glo.date = self.date
         glo.dict = self.dict
+        glo.day_data = self.day_data
         self.data = None
         self.date = None
         self.dict = None
@@ -247,7 +261,10 @@ class ACModel(Process):
                 amount += l[1]
                 amount_list.append(amount)
         dis = "E:/运行结果/Agent编号" + str(index)
-        path = dis + "/episode_" + str(episode) + ".html"
+        if self.sys_model!='run':
+            path = dis + "/episode_" + str(episode) + ".html"
+        else:
+            path = dis + "sim.html"
         # 目录不存在则创建目录
         if not os.path.exists(dis):
             os.makedirs(dis)
@@ -322,61 +339,63 @@ class ACModel(Process):
                 plot_bgcolor='#FFFFFF'
             )
         }, auto_open=False, filename=path)
-        loss_scatter = go.Scatter(x=[i for i in range(len(self.step_loss_list))],
-                                  y=self.step_loss_list,
-                                  name='loss',
-                                  line=dict(color='orange'),
-                                  mode='lines',
-                                  opacity=1)
-        path = dis + "/loss.html"
-        py.offline.plot({
-            "data": [loss_scatter],
-            "layout": go.Layout(
-                title="loss 编号" + str(self.index),
-                xaxis=dict(title='训练次数', showgrid=False, zeroline=False),
-                yaxis=dict(title='loss', showgrid=False, zeroline=False),
-                paper_bgcolor='#FFFFFF',
-                plot_bgcolor='#FFFFFF'
-            )
-        }, auto_open=False, filename=path)
-        reward_scatter = go.Scatter(x=[i for i in range(len(self.reward_list))],
-                                  y=self.reward_list,
-                                  name='reward',
-                                  line=dict(color='orange'),
-                                  mode='lines',
-                                  opacity=1)
-        path = dis + "/reward.html"
-        py.offline.plot({
-            "data": [reward_scatter],
-            "layout": go.Layout(
-                title="reward 编号" + str(self.index),
-                xaxis=dict(title='训练次数', showgrid=False, zeroline=False),
-                yaxis=dict(title='reward', showgrid=False, zeroline=False),
-                paper_bgcolor='#FFFFFF',
-                plot_bgcolor='#FFFFFF'
-            )
-        }, auto_open=False, filename=path)
+        if self.sys_model!='run':
+            loss_scatter = go.Scatter(x=[i for i in range(len(self.step_loss_list))],
+                                      y=self.step_loss_list,
+                                      name='loss',
+                                      line=dict(color='orange'),
+                                      mode='lines',
+                                      opacity=1)
+            path = dis + "/loss.html"
+            py.offline.plot({
+                "data": [loss_scatter],
+                "layout": go.Layout(
+                    title="loss 编号" + str(self.index),
+                    xaxis=dict(title='训练次数', showgrid=False, zeroline=False),
+                    yaxis=dict(title='loss', showgrid=False, zeroline=False),
+                    paper_bgcolor='#FFFFFF',
+                    plot_bgcolor='#FFFFFF'
+                )
+            }, auto_open=False, filename=path)
+            reward_scatter = go.Scatter(x=[i for i in range(len(self.reward_list))],
+                                        y=self.reward_list,
+                                        name='reward',
+                                        line=dict(color='orange'),
+                                        mode='lines',
+                                        opacity=1)
+            path = dis + "/reward.html"
+            py.offline.plot({
+                "data": [reward_scatter],
+                "layout": go.Layout(
+                    title="reward 编号" + str(self.index),
+                    xaxis=dict(title='训练次数', showgrid=False, zeroline=False),
+                    yaxis=dict(title='reward', showgrid=False, zeroline=False),
+                    paper_bgcolor='#FFFFFF',
+                    plot_bgcolor='#FFFFFF'
+                )
+            }, auto_open=False, filename=path)
 
     def save_weights(self):
-        dis = "最新训练权重/Agent编号" + str(self.index)
-        # 目录不存在则创建目录
-        if not os.path.exists(dis):
-            os.makedirs(dis)
+        if self.sys_model!='run':
+            dis = "最新训练权重/Agent编号" + str(self.index)
+            # 目录不存在则创建目录
+            if not os.path.exists(dis):
+                os.makedirs(dis)
 
-        # 保存最新权重
-        self.actor.model.save_weights(dis + '/main_actor_weights.h5', overwrite=True)
-        self.actor.target_model.save_weights(dis + '/target_actor_weights.h5', overwrite=True)
-        self.critic.model.save_weights(dis + '/main_critic_weights.h5', overwrite=True)
-        self.critic.target_model.save_weights(dis + '/target_critic_weights.h5', overwrite=True)
-        # 保存历史权重
-        dis = "E:/训练历史权重/Agent编号" + str(self.index)
-        # 目录不存在则创建目录
-        if not os.path.exists(dis):
-            os.makedirs(dis)
+            # 保存最新权重
+            self.actor.model.save_weights(dis + '/main_actor_weights.h5', overwrite=True)
+            self.actor.target_model.save_weights(dis + '/target_actor_weights.h5', overwrite=True)
+            self.critic.model.save_weights(dis + '/main_critic_weights.h5', overwrite=True)
+            self.critic.target_model.save_weights(dis + '/target_critic_weights.h5', overwrite=True)
+            # 保存历史权重
+            dis = "E:/训练历史权重/Agent编号" + str(self.index)
+            # 目录不存在则创建目录
+            if not os.path.exists(dis):
+                os.makedirs(dis)
 
-        self.actor.model.save_weights(dis + '/' + str(self.episode.value) + '_main_actor_weights.h5', overwrite=True)
-        self.actor.target_model.save_weights(dis + '/' + str(self.episode.value) + '_target_actor_weights.h5',
-                                             overwrite=True)
-        self.critic.model.save_weights(dis + '/' + str(self.episode.value) + '_main_critic_weights.h5', overwrite=True)
-        self.critic.target_model.save_weights(dis + '/' + str(self.episode.value) + '_target_critic_weights.h5',
-                                              overwrite=True)
+            self.actor.model.save_weights(dis + '/' + str(self.episode.value) + '_main_actor_weights.h5', overwrite=True)
+            self.actor.target_model.save_weights(dis + '/' + str(self.episode.value) + '_target_actor_weights.h5',
+                                                 overwrite=True)
+            self.critic.model.save_weights(dis + '/' + str(self.episode.value) + '_main_critic_weights.h5', overwrite=True)
+            self.critic.target_model.save_weights(dis + '/' + str(self.episode.value) + '_target_critic_weights.h5',
+                                                  overwrite=True)

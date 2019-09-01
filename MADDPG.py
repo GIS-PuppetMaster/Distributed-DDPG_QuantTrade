@@ -46,14 +46,12 @@ def execute_model(m):
     flag = True
     start_time = datetime.now()
     while flag:
-        """
         if (datetime.now() - start_time).seconds >= 120:
-            print("threadflag:" + str(thread_flag))
+            print("thread_flag:" + str(thread_flag))
             print("time_stamp:" + str(time_stamp.value))
             for thread in thread_list:
                 thread.terminate()
             os._exit(1)
-        """
         flag = False
         # print(str(thread_flag))
         pause_counter = 0
@@ -71,7 +69,7 @@ def execute_model(m):
     return False
 
 
-def run_model():
+def train_model():
     global model
     global thread_list
     global thread_flag
@@ -88,7 +86,7 @@ def run_model():
     # 建立模型
     for i in range(glo.agent_num):
         thread_list[i] = ACModel(i, model, thread_flag, ep, time_stamp, multi_episode, multi_step, glo.data, glo.date,
-                                 glo.dict, glo.scaler, flag_lock, obs)
+                                 glo.dict, glo.day_data, glo.scaler, glo.min_scaler, flag_lock, obs, sys_model)
         # thread_list[i].daemon=True
     execute_model('i')
     for episode in range(glo.train_times):
@@ -106,7 +104,7 @@ def run_model():
             obs.value = 'f'
             pause_reset = False
             while len(ep.exp_pool) <= glo.experience_pool_size:
-                if len(ep.exp_pool) < glo.experience_pool_size:
+                if len(ep.exp_pool) < glo.experience_pool_size and sys_model != "run":
                     # 观察环境模式
                     flag = True
                     obs.value = 't'
@@ -137,13 +135,41 @@ def run_model():
                 if execute_model('t'):
                     break
         # 保存经验池
-        if episode % (glo.train_times / glo.save_exp_frequency) == 0 and episode != 0:
+        if episode % (glo.train_times / glo.save_exp_frequency) == 0 and episode != 0 and sys_model != "run":
             save_experience_pool(ep)
         # 每个episode保存权重
         execute_model('s')
     # 终止所有进程
-    print("终止进程")
-    execute_model('e')
+    # print("终止进程")
+    # execute_model('e')
+
+
+def run_model():
+    global model
+    global thread_list
+    global thread_flag
+    global sys_model
+    global time_stamp
+    global multi_step
+    global multi_episode
+    global flag_lock
+    # 建立经验池
+    ep = Experience_pool()
+    # 载入经验池
+    ep.load()
+    print("建立模型")
+    # 建立模型
+    for i in range(glo.agent_num):
+        thread_list[i] = ACModel(i, model, thread_flag, ep, time_stamp, multi_episode, multi_step, glo.data, glo.date,
+                                 glo.dict, glo.day_data, glo.scaler, glo.min_scaler, flag_lock, obs, sys_model)
+        # thread_list[i].daemon=True
+    execute_model('i')
+    # 当没有全部暂停时
+    while not execute_model('r'):
+        multi_step.value += 1
+        # 循环运行
+        pass
+    # 否则退出
 
 
 def save_experience_pool(ep):
@@ -167,7 +193,10 @@ if __name__ == '__main__':
     thread_list = [None for i in range(glo.agent_num)]
     time_stamp = multiprocessing.Value('L', 0)
     multiprocessing.freeze_support()
-    # sys_model = input("请输入运行模式：run\\train\\both\n")
-    sys_model = 'both'
+    sys_model = input("请输入运行模式：run\\train\\both\n")
+    # sys_model = 'both'
     glo.init()
-    run_model()
+    if sys_model == "both" or sys_model == 'train':
+        train_model()
+    else:
+        run_model()

@@ -1,23 +1,27 @@
 class Experience:
     stock_state = [[]]
     agent_state = []
+    price_state = []
     action = []
     reward = []
     stock_state2 = [[]]
     agent_state2 = []
+    price_state2 = []
 
-    def __init__(self, stock_state, agent_state, action, reward, stock_state2, agent_state2):
+    def __init__(self, stock_state, agent_state, price_state, action, reward, stock_state2, agent_state2, price_state2):
         self.stock_state = stock_state
         self.agent_state = agent_state
+        self.price_state = price_state
         self.action = action
         self.reward = reward
         self.stock_state2 = stock_state2
         self.agent_state2 = agent_state2
+        self.price_state2 = price_state2
 
     def get_experience(self):
-        return {'stock_state': self.stock_state, 'agent_state': self.action, 'action': self.action,
-                'reward': self.reward, 'stock_state2': self.stock_state2, 'agent_state2': self.agent_state2}
-
+        return {'stock_state': self.stock_state, 'agent_state': self.action, 'price_state': self.price_state,
+                'action': self.action, 'reward': self.reward, 'stock_state2': self.stock_state2,
+                'agent_state2': self.agent_state2, 'price_state2': self.price_state2}
 
     """
     def __repr__(self):
@@ -27,5 +31,5 @@ class Experience:
 
     @staticmethod
     def object_hook(d):
-        return Experience(d['stock_state'], d['agent_state'], d['action'], d['reward'], d['stock_state2'],
-                          d['agent_state2'])
+        return Experience(d['stock_state'], d['agent_state'], d['price_state'], d['action'], d['reward'],
+                          d['stock_state2'], d['agent_state2'], d['price_state2'])

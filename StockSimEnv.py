@@ -2,13 +2,15 @@ from sklearn.preprocessing import *
 from StockDate import *
 import numpy as np
 import math
+import talib as ta
 
 
 # auth("13074581737", "trustno1")
 
 
 class Env:
-    def __init__(self, scaler, stock_code=None, start_date=None, ori_money=pow(10, 6), quant=None):
+    def __init__(self, scaler, min_scaler, stock_code=None, start_date=None, ori_money=pow(10, 6), quant=None):
+
         """
         初始化环境
         :return: None
@@ -29,6 +31,7 @@ class Env:
         self.money = self.ori_money
         self.stock_value = []
         self.data = glo.data[self.stock_code]
+        self.day_data = glo.day_data[self.stock_code]
         self.price = self.get_stock_price(self.gdate.get_date())
         self.init_with_ori_stock_value(self.price, quant)
         self.time_list = []
@@ -38,6 +41,8 @@ class Env:
         self.start_date = self.gdate.get_date()
         self.max_profit = self.ori_money + self.ori_value
         self.standard_scaler = scaler
+        self.min_scaler = min_scaler
+        self.last_trade = self.gdate.get_date()
 
     def reset(self, start_date=None, ori_money=pow(10, 6), quant=None):
         self.gdate = StockDate(self.stock_code)
@@ -57,6 +62,7 @@ class Env:
         self.price_list = []
         self.start_date = self.gdate.get_date()
         self.max_profit = self.ori_money + self.ori_value
+        self.last_trade = self.gdate.get_date()
         print("重置环境完成")
 
     def init_with_ori_stock_value(self, price, quant=None):
@@ -103,38 +109,38 @@ class Env:
         else:
             self.temp_date.set_date(date)
         stock_state = []
-        # 获取前5天的数据
+        price_state = []
+        # 获取当前股价信息
+        day_state = np.array(self.data.loc[str(self.temp_date.get_date())]).transpose().tolist()
+        price_state.append(day_state)
+        # 获取前几天的stockstats
+        self.temp_date.last_date()
         for i in range(0, glo.day):
-            # day_state = []
-            """
-            # 获取前count分钟的数据
-            for j in range(0, glo.count):
-                line = np.array(self.data.loc[str(self.temp_date.get_date())])[[0, 1, 2, 3, 4, 5]].transpose().tolist()
-                self.temp_date.last_date()
-                day_state.append(line)
-            """
-            day_state = np.array(self.data.loc[str(self.temp_date.get_date())])[[0, 1, 2, 3, 4, 5]].transpose().tolist()
-            # 归一化
-            # day_state = MinMaxScaler().fit_transform(scale(day_state, axis=0))
+            index = 0
+            s = str(self.temp_date.get_date())
+            s_list = list(s)
+            for i in range(0, len(s_list)):
+                if s_list[i] == " ":
+                    index = i
+                    break
+            day_state = np.array(self.day_data.loc[s[0:index]]).transpose().tolist()
             stock_state.append(day_state)
-            # 前一天
-            self.temp_date.last_day()
+            self.temp_date.last_date()
         # 标准化
         # stock_state = MinMaxScaler().fit_transform(scale(stock_state, axis=0))
         # 防止对0取log错误
-        stock_state = np.array(stock_state)
+        # stock_state = np.array(stock_state)
         # stock_state[stock_state <= 0] = 0.0000001
         # stock_state = np.tanh(np.log10(stock_state)).tolist()
         # stock_state = np.log10(stock_state).tolist()
         stock_state = self.standard_scaler[self.stock_code].transform(stock_state)
+        price_state = self.min_scaler[self.stock_code].transform(price_state)
         # 生成agent状态
         agent_state = np.array([self.money] + [self.get_stock_total_value(self.price)] + [self.get_stock_amount()])
         # 归一化
-        """
         agent_state[agent_state <= 0] = 0.0000001
         # agent_state = np.tanh(np.log10(agent_state))
-        agent_state = np.log10(agent_state)/10
-        """
+        agent_state = np.log10(agent_state)
         # agent_state = agent_state.reshape(-1, 1).tolist()
         # 归一化
         # agent_state = MinMaxScaler().fit_transform(scale(agent_state, axis=0))
@@ -142,7 +148,8 @@ class Env:
         # stock_state = np.array(stock_state).transpose((1, 0, 2)).reshape(1, glo.count, glo.day, glo.stock_state_size).tolist()
         stock_state = np.array(stock_state).reshape(1, glo.day, glo.stock_state_size).tolist()
         agent_state = np.array(agent_state).reshape(1, glo.agent_state_size).tolist()
-        return stock_state, agent_state
+        price_state = np.array(price_state).reshape(1, glo.price_state_size).tolist()
+        return stock_state, agent_state, price_state
 
     def get_stock_price(self, date=None):
         """
@@ -213,6 +220,7 @@ class Env:
             next_date, over_flow = self.gdate.next_date()
         # 如果交易了则跳到下一天
         else:
+            self.last_trade = now_date
             next_date, over_flow = self.gdate.next_day()
         # 切换到下一天的话记录绘图信息
         if next_date.day != now_date.day or next_date.month != now_date.month or next_date.year != now_date.year:
@@ -232,7 +240,6 @@ class Env:
         """计算奖励"""
         # 计算下一时刻期望毛利润
         next_date_profit = self.money + self.get_stock_total_value(self.get_stock_price(next_date))
-        """
         # 更新历史最高毛利润
         if next_date_profit >= self.max_profit:
             self.max_profit = next_date_profit
@@ -242,32 +249,30 @@ class Env:
         retreat = -1
         if int(base) != 0:
             retreat = (next_date_profit - self.max_profit) / base
-        reward = (next_date_profit - self.ori_money - self.ori_value) / (self.ori_money + self.ori_value) * 0.5 + retreat * 0.5
+        reward = (next_date_profit - self.ori_money - self.ori_value) / (self.ori_money + self.ori_value)
         # 添加惩罚项
         if flag:
             # 惩罚
-            reward -= abs(action_0) * 0.5
+            reward -= abs(action_0) * 10
         # 交易历史日期不为空且当前距离上一次交易超过5天 或者 当前交易历史日期为空且当前日期距离开始日期超过5天
-        if (len(self.time_list) != 0 and (now_date.day - self.time_list[-1].day) >= 5) or (
-                len(self.time_list) == 0 and (now_date.day - self.start_date.day) >= 5):
-            # 惩罚
-            reward -= 50
-        """"""
+        if len(self.time_list) != 0 and (now_date - self.last_trade).days >= 5:
+            reward -= abs(action[1]) * (now_date - self.last_trade).days
+        if len(self.time_list) == 0 and (now_date - self.start_date).days >= 5:
+            reward -= abs(action[1]) * (now_date - self.start_date).days
         """
         reward = (next_date_profit - self.ori_money - self.ori_value) / (self.ori_money + self.ori_value)
-
         if flag:
             # 惩罚
-            reward -= abs(action_0) * 5
+            reward -= abs(action_0) * 10
         # 交易历史日期不为空且当前距离上一次交易超过5天 或者 当前交易历史日期为空且当前日期距离开始日期超过5天
-        if (len(self.time_list) != 0 and (now_date - self.time_list[-1]).days >= 5) or (
-                len(self.time_list) == 0 and (now_date - self.start_date).days >= 5):
-            # 惩罚
-            reward -= abs(action[1]) * 10
-
+        # 惩罚
+        if len(self.time_list) != 0 and (now_date - self.last_trade).days >= 5:
+            reward -= abs(action[1]) * (now_date - self.last_trade).days
+        if len(self.time_list) == 0 and (now_date - self.start_date).days >= 5:
+            reward -= abs(action[1]) * (now_date - self.start_date).days
+        """
         # 交易了返回下一天的状态，否则返回下一个frequency的状态
         state = self.get_state(date=next_date)
-        if self.gdate.index == len(self.gdate.date_list) - 1 or over_flow or (
-                next_date - self.start_date).days >= 365:
+        if self.gdate.index == len(self.gdate.date_list) - 1 or over_flow:
             reward = None
-        return state[0], state[1], reward
+        return state[0], state[1], state[2], reward

@@ -18,27 +18,33 @@ class Experience_pool():
         """
         stock_res = 0
         agent_res = 0
+        price_res = 0
         action_res = 0
         reward_res = 0
         stock_res2 = 0
         agent_res2 = 0
+        price_res2 = 0
         for i in range(experience_list.__len__()):
             ex = experience_list[i]
             if i == 0:
                 stock_res = ex.stock_state
                 agent_res = ex.agent_state
+                price_res = ex.price_state
                 action_res = ex.action
                 reward_res = ex.reward
                 stock_res2 = ex.stock_state2
                 agent_res2 = ex.agent_state2
+                price_res2 = ex.price_state2
             else:
                 stock_res = np.concatenate((ex.stock_state, stock_res), axis=0)
                 agent_res = np.concatenate((ex.agent_state, agent_res), axis=0)
+                price_res = np.concatenate((ex.price_state, price_res), axis=0)
                 action_res = np.concatenate((ex.action, action_res), axis=0)
                 reward_res = np.concatenate((ex.reward, reward_res), axis=0)
                 stock_res2 = np.concatenate((ex.stock_state2, stock_res2), axis=0)
                 agent_res2 = np.concatenate((ex.agent_state2, agent_res2), axis=0)
-        return stock_res.tolist(), agent_res.tolist(), action_res.tolist(), reward_res.tolist(), stock_res2.tolist(), agent_res2.tolist()
+                price_res2 = np.concatenate((ex.price_state2, price_res2), axis=0)
+        return stock_res.tolist(), agent_res.tolist(), price_res.tolist(), action_res.tolist(), reward_res.tolist(), stock_res2.tolist(), agent_res2.tolist(),price_res2.tolist()
 
     def append_experience(self, experience):
         """
