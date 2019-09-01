@@ -254,10 +254,10 @@ class Env:
         if flag:
             # 惩罚
             reward -= abs(action_0) * 10
-        # 交易历史日期不为空且当前距离上一次交易超过5天 或者 当前交易历史日期为空且当前日期距离开始日期超过5天
-        if len(self.time_list) != 0 and (now_date - self.last_trade).days >= 5:
+        # 交易历史日期不为空且当前距离上一次交易超过15天 或者 当前交易历史日期为空且当前日期距离开始日期超过15天
+        if len(self.time_list) != 0 and (now_date - self.last_trade).days >= 15:
             reward -= abs(action[1]) * (now_date - self.last_trade).days
-        if len(self.time_list) == 0 and (now_date - self.start_date).days >= 5:
+        if len(self.time_list) == 0 and (now_date - self.start_date).days >= 15:
             reward -= abs(action[1]) * (now_date - self.start_date).days
         """
         reward = (next_date_profit - self.ori_money - self.ori_value) / (self.ori_money + self.ori_value)

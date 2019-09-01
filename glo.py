@@ -17,11 +17,15 @@ day = 5
 # , '000938.XSHE', '600094.XSHG', '600519.XSHG', '601318.XSHG'
 stock_code_list = ['000517.XSHE']
 # DDPG超参数
-train_times = 100
+train_times = 1000
 train_step = 500
 gamma = 0.99
 mini_batch_size = 64
-experience_pool_size = 50000
+experience_pool_size = 20000
+low_rate = 2
+mid_rate = 4
+high_rate = 4
+sum_rate = low_rate+mid_rate+high_rate
 tau = 0.001
 stock_state_size = 18
 agent_state_size = 3
@@ -65,7 +69,9 @@ def init():
         state_data = state_data.rename(columns={"money": "amount"})
         state_data = stockstats.StockDataFrame.retype(state_data)
         state_data = pd.concat([state_data[['open', 'close', 'high', 'low', 'volume', 'amount']],
-                                state_data[['macd', 'macds', 'macdh', 'rsi_6', 'rsi_12', 'cci', 'tr', 'atr', 'kdjk', 'kdjd', 'kdjj', 'wr_6']]], axis=1,
+                                state_data[
+                                    ['macd', 'macds', 'macdh', 'rsi_6', 'rsi_12', 'cci', 'tr', 'atr', 'kdjk', 'kdjd',
+                                     'kdjj', 'wr_6']]], axis=1,
                                sort=False)
         # 记录数据
         data[s] = temp_data

@@ -5,10 +5,11 @@ from multiprocessing import Lock, Manager, Value
 
 
 class Experience_pool():
-    def __init__(self):
+    def __init__(self, level):
         self.exp_pool = Manager().list()
         self.experience_cursor = Value('L', 0)
         self.lock = Lock()
+        self.level = level
 
     def get_info_from_experience_list(self, experience_list):
         """
@@ -44,7 +45,7 @@ class Experience_pool():
                 stock_res2 = np.concatenate((ex.stock_state2, stock_res2), axis=0)
                 agent_res2 = np.concatenate((ex.agent_state2, agent_res2), axis=0)
                 price_res2 = np.concatenate((ex.price_state2, price_res2), axis=0)
-        return stock_res.tolist(), agent_res.tolist(), price_res.tolist(), action_res.tolist(), reward_res.tolist(), stock_res2.tolist(), agent_res2.tolist(),price_res2.tolist()
+        return stock_res.tolist(), agent_res.tolist(), price_res.tolist(), action_res.tolist(), reward_res.tolist(), stock_res2.tolist(), agent_res2.tolist(), price_res2.tolist()
 
     def append_experience(self, experience):
         """
@@ -54,19 +55,19 @@ class Experience_pool():
         :return: None
         """
         with self.lock:
-            if self.experience_cursor.value >= len(self.exp_pool) - 1 and len(self.exp_pool)<glo.experience_pool_size:
+            if self.experience_cursor.value >= len(self.exp_pool) - 1 and len(self.exp_pool) < glo.experience_pool_size:
                 self.exp_pool.append(experience)
             else:
                 self.exp_pool[self.experience_cursor.value] = experience
             self.experience_cursor.value = (self.experience_cursor.value + 1) % glo.experience_pool_size
 
-    def get_experience_batch(self):
+    def get_experience_batch(self, batch_size=glo.mini_batch_size):
         """
         获取经验训练包
         :return: 从经验池中随机采样的经验训练包
         """
         index_list = [i for i in range(0, glo.experience_pool_size - 1)]
-        sample_index_list = random.sample(index_list, glo.mini_batch_size)
+        sample_index_list = random.sample(index_list, batch_size)
         res = []
         for i in sample_index_list:
             res.append(self.exp_pool[i])
@@ -76,10 +77,10 @@ class Experience_pool():
         import os
         import json
         from Experience import Experience
-        error=False
-        if os.path.exists("Data/experience_pool.json"):
+        error = False
+        if os.path.exists("Data/experience_pool_" + str(self.level) + ".json"):
             print("载入经验池")
-            with open("Data/experience_pool.json", "r", encoding="UTF-8") as f:
+            with open("Data/experience_pool_" + str(self.level) + ".json", "r", encoding="UTF-8") as f:
                 s = f.read()
                 try:
                     exp_list = json.loads(s, object_hook=Experience.object_hook)
@@ -88,6 +89,6 @@ class Experience_pool():
                     print("已载入经验池")
                 except:
                     print("经验池文件错误，删除文件重新观察环境")
-                    error=True
+                    error = True
         if error:
-            os.remove("Data/experience_pool.json")
+            os.remove("Data/experience_pool_" + str(self.level) + ".json")

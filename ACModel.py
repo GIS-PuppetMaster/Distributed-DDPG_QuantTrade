@@ -14,7 +14,7 @@ from datetime import *
 
 
 class ACModel(Process):
-    def __init__(self, index, mode, thread_flag, ep, time_stamp, episode, step, _data, _date, _dict, _day_data, _scaler,
+    def __init__(self, index, mode, thread_flag, ep_dict, time_stamp, episode, step, _data, _date, _dict, _day_data, _scaler,
                  _min_scaler, lock, obs, sys_model):
         self.index = index
         self.env = Env(stock_code='000517.XSHE', scaler=_scaler, min_scaler=_min_scaler)
@@ -22,7 +22,7 @@ class ACModel(Process):
         self.actor = None
         self.critic = None
         self.thread_flag = thread_flag
-        self.ep = ep
+        self.ep_dict = ep_dict
         self.stock_state, self.agent_state, self.price_state = self.env.get_state()
         self.mode = mode
         self.episode = episode
@@ -81,10 +81,21 @@ class ACModel(Process):
         sys.stderr = f
         """
 
+    def get_mini_batch(self):
+        low_batch_size = int(glo.mini_batch_size * (glo.low_rate / glo.sum_rate))
+        mid_batch_size = int(glo.mini_batch_size * (glo.mid_rate / glo.sum_rate))
+        high_batch_size = int(glo.mini_batch_size - low_batch_size - mid_batch_size)
+        low_stock_state_, low_agent_state_, low_price_state_, low_action_, low_reward_, low_next_stock_state_, low_next_agent_state_, low_next_price_state_ = \
+            self.ep_dict['low'].get_info_from_experience_list(self.ep_dict['low'].get_experience_batch(low_batch_size))
+        mid_stock_state_, mid_agent_state_, mid_price_state_, mid_action_, mid_reward_, mid_next_stock_state_, mid_next_agent_state_, mid_next_price_state_ = \
+            self.ep_dict['mid'].get_info_from_experience_list(self.ep_dict['mid'].get_experience_batch(mid_batch_size))
+        high_stock_state_, high_agent_state_, high_price_state_, high_action_, high_reward_, high_next_stock_state_, high_next_agent_state_, high_next_price_state_ = \
+            self.ep_dict['high'].get_info_from_experience_list(self.ep_dict['high'].get_experience_batch(high_batch_size))
+        return low_stock_state_ + mid_stock_state_ + high_stock_state_, low_agent_state_ + mid_agent_state_ + high_agent_state_, low_price_state_ + mid_price_state_ + high_price_state_, low_action_ + mid_action_ + high_action_, low_reward_ + mid_reward_ + high_reward_, low_next_stock_state_ + mid_next_stock_state_ + high_next_stock_state_, low_next_agent_state_ + mid_next_agent_state_ + high_next_agent_state_, low_next_price_state_ + mid_next_price_state_ + high_next_price_state_
+
     def train_nn(self):
         # print("编号" + str(self.index) + "获取经验包")
-        stock_state_, agent_state_, price_state_, action_, reward_, next_stock_state_, next_agent_state_, next_price_state_ = self.ep.get_info_from_experience_list(
-            self.ep.get_experience_batch())
+        stock_state_, agent_state_, price_state_, action_, reward_, next_stock_state_, next_agent_state_, next_price_state_ = self.get_mini_batch()
         # print("编号" + str(self.index) + "生成yi")
         yi = (np.array(reward_) + glo.gamma * np.array(
             self.critic.target_model.predict(
@@ -116,7 +127,7 @@ class ACModel(Process):
             print("编号" + str(self.index) + "action:" + str(action))
             # TODO:完成ES噪声算法后删除
             # print("编号" + str(self.index) + "添加噪声")
-            if self.sys_model!='run':
+            if self.sys_model != 'run':
                 action += np.random.randn(2, ) * 0.01
                 if action[0] > 1:
                     action[0] = 1
@@ -135,15 +146,21 @@ class ACModel(Process):
         if reward is not None:
             # 解决numpy.float32没有__dict__方法，使得经验无法使用Json.dump的问题
             # print("编号" + str(self.index) + "append经验")
-            if self.sys_model!='run':
+            if self.sys_model != 'run':
                 a = []
                 for i in range(glo.action_size):
                     a.append(action[i].item())
-                experience = Experience(self.stock_state, self.agent_state, self.price_state, [a], [[float(str(reward))]],
+                experience = Experience(self.stock_state, self.agent_state, self.price_state, [a],
+                                        [[float(str(reward))]],
                                         next_stock_state,
                                         next_agent_state, next_price_state)
-                self.ep.append_experience(experience)
-                if len(self.ep.exp_pool) >= glo.experience_pool_size:
+                if reward < -0.3:
+                    self.ep_dict['low'].append_experience(experience)
+                elif -0.3 <= reward <= 0.3:
+                    self.ep_dict['mid'].append_experience(experience)
+                else:
+                    self.ep_dict['high'].append_experience(experience)
+                if self.obs.value == 'f':
                     # 观察模式不记录loss
                     self.reward_list.append(reward)
             self.stock_state = next_stock_state
@@ -261,7 +278,7 @@ class ACModel(Process):
                 amount += l[1]
                 amount_list.append(amount)
         dis = "E:/运行结果/Agent编号" + str(index)
-        if self.sys_model!='run':
+        if self.sys_model != 'run':
             path = dis + "/episode_" + str(episode) + ".html"
         else:
             path = dis + "sim.html"
@@ -339,7 +356,7 @@ class ACModel(Process):
                 plot_bgcolor='#FFFFFF'
             )
         }, auto_open=False, filename=path)
-        if self.sys_model!='run':
+        if self.sys_model != 'run':
             loss_scatter = go.Scatter(x=[i for i in range(len(self.step_loss_list))],
                                       y=self.step_loss_list,
                                       name='loss',
@@ -376,7 +393,7 @@ class ACModel(Process):
             }, auto_open=False, filename=path)
 
     def save_weights(self):
-        if self.sys_model!='run':
+        if self.sys_model != 'run':
             dis = "最新训练权重/Agent编号" + str(self.index)
             # 目录不存在则创建目录
             if not os.path.exists(dis):
@@ -393,9 +410,11 @@ class ACModel(Process):
             if not os.path.exists(dis):
                 os.makedirs(dis)
 
-            self.actor.model.save_weights(dis + '/' + str(self.episode.value) + '_main_actor_weights.h5', overwrite=True)
+            self.actor.model.save_weights(dis + '/' + str(self.episode.value) + '_main_actor_weights.h5',
+                                          overwrite=True)
             self.actor.target_model.save_weights(dis + '/' + str(self.episode.value) + '_target_actor_weights.h5',
                                                  overwrite=True)
-            self.critic.model.save_weights(dis + '/' + str(self.episode.value) + '_main_critic_weights.h5', overwrite=True)
+            self.critic.model.save_weights(dis + '/' + str(self.episode.value) + '_main_critic_weights.h5',
+                                           overwrite=True)
             self.critic.target_model.save_weights(dis + '/' + str(self.episode.value) + '_target_critic_weights.h5',
                                                   overwrite=True)
