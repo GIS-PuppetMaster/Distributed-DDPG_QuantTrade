@@ -123,11 +123,13 @@ class ACModel(Process):
 
         # print("编号" + str(self.index) + "梯度\n" + str(grads))
         # print("编号" + str(self.index) + "训练actor")
+        """
         dis = "E:/运行结果"
         if not os.path.exists(dis):
             os.makedirs(dis)
         with open(dis + "/Agent编号" + str(self.index) + '.log','w') as f:
             f.write(str(grads))
+        """
         self.actor.train(stock_state_, agent_state_, price_state_, grads)
         # print("编号" + str(self.index) + "更新target")
         # 更新参数
