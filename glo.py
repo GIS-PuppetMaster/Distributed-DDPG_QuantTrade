@@ -13,9 +13,10 @@ count = 32
 """
 frequency = '30' + 'm'
 """"""
-day = 5
+day = 30
 # , '000938.XSHE', '600094.XSHG', '600519.XSHG', '601318.XSHG'
 stock_code_list = ['000517.XSHE']
+# stock_code_list = ['601318.XSHG']
 # DDPG超参数
 train_times = 1000
 train_step = 500
@@ -23,18 +24,18 @@ gamma = 0.99
 mini_batch_size = 64
 experience_pool_size = 20000
 low_rate = 2
-mid_rate = 4
-high_rate = 4
-sum_rate = low_rate+mid_rate+high_rate
+mid_rate = 3
+high_rate = 5
+sum_rate = low_rate + mid_rate + high_rate
 tau = 0.001
-stock_state_size = 18
+stock_state_size = 19
 agent_state_size = 3
 price_state_size = 6
 action_size = 2
 epsilon = 0.1
 agent_num = 8
-actor_learning_rate = 0.001
-critic_learning_rate = 0.01
+actor_learning_rate = 0.05
+critic_learning_rate = 0.001
 # 每轮训练画多少次图像
 draw_frequency = 10
 # 一共保存多少次经验
@@ -70,9 +71,8 @@ def init():
         state_data = stockstats.StockDataFrame.retype(state_data)
         state_data = pd.concat([state_data[['open', 'close', 'high', 'low', 'volume', 'amount']],
                                 state_data[
-                                    ['macd', 'macds', 'macdh', 'rsi_6', 'rsi_12', 'cci', 'tr', 'atr', 'kdjk', 'kdjd',
-                                     'kdjj', 'wr_6']]], axis=1,
-                               sort=False)
+                                    ['close_5_sma', 'macd', 'macds', 'macdh', 'rsi_6', 'rsi_12', 'cci', 'tr', 'atr',
+                                     'kdjk', 'kdjd', 'kdjj', 'wr_6']]], axis=1, sort=False)
         # 记录数据
         data[s] = temp_data
         day_data[s] = state_data

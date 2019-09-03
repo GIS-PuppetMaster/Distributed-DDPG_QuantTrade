@@ -1,6 +1,7 @@
 import glo
 from StockSimEnv import Env
 from copy import *
+import os
 
 
 class ActorNetwork(object):
@@ -23,7 +24,7 @@ class ActorNetwork(object):
         params_gradients = tf.gradients(self.model.output, self.weights, -self.action_gradients)
         grad = zip(params_gradients, self.weights)
         global_step = tf.Variable(0, trainable=False)
-        learn_rate = tf.train.exponential_decay(self.LEARNING_RATE, global_step, 2000, 0.9)
+        learn_rate = tf.train.exponential_decay(self.LEARNING_RATE, global_step, 50000, 0.9)
         self.optimize = tf.train.AdamOptimizer(learn_rate).apply_gradients(grad, global_step=global_step)
         self.sess.run(tf.global_variables_initializer())
 
@@ -87,8 +88,16 @@ class ActorNetwork(object):
     def build_actor_network(self):
         from keras.models import Model
         from keras.layers import Input, Conv1D, Activation, BatchNormalization, Dense, Concatenate, Flatten, \
-            regularizers, Reshape, LSTM, Bidirectional
+            Reshape, LSTM, Bidirectional, GaussianNoise, CuDNNLSTM, SeparableConv1D, AveragePooling1D
+        from keras import regularizers
         from keras.utils import plot_model
+        from MyKerasTool import Dense_res_block3
+        from MyKerasTool import Dense_block_sparse
+        from MyKerasTool import Conv1D_res_block2
+        from MyKerasTool import Conv1D_res_block3
+        from MyKerasTool import CuDNNLSTM_res_block2
+        from MyKerasTool import CuDNNLSTM_res_block3
+        from MyKerasTool import Dense_BN
         """
            输入：state(stock,agent)
            输出：action
@@ -100,7 +109,7 @@ class ActorNetwork(object):
         input_agent_state = Input(shape=(glo.agent_state_size,))
         input_agent_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_agent_state)
         input_price_state = Input(shape=(glo.price_state_size,))
-        input_price_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_price_state)
+        # input_price_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_price_state)
         """
         # 首先把日期时序和特征压缩
         x_stock_state = Reshape((glo.count, glo.day * glo.stock_state_size))(input_stock_state)
@@ -111,30 +120,55 @@ class ActorNetwork(object):
         # 展开日期时序和特征
         x_stock_state = Reshape((glo.day, glo.stock_state_size))(x_stock_state)
         """
-        x_stock_state = Bidirectional(
-            LSTM(32, activation='tanh', recurrent_activation='tanh', kernel_regularizer=regularizers.l2(0.01),
-                 unroll=True, return_sequences=True))(input_stock_state)
-        x_stock_state = Bidirectional(
-            LSTM(16, activation='tanh', recurrent_activation='tanh', kernel_regularizer=regularizers.l2(0.01),
-                 unroll=True, return_sequences=False))(x_stock_state)
-        # x_stock_state = Flatten()(input_stock_state)
-        dense01 = Dense(32, kernel_regularizer=regularizers.l2(0.01))(x_stock_state)
-        dense01 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense01)
-        dense01 = Activation('tanh')(dense01)
-        dense01 = Dense(8, kernel_regularizer=regularizers.l2(0.01))(dense01)
-        dense01 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense01)
-        dense01 = Activation('tanh')(dense01)
-        merge_layer = Concatenate()([dense01, input_agent_state_, input_price_state_])
-        dense02 = Dense(32)(merge_layer)
-        dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
-        dense02 = Activation('tanh')(dense02)
-        dense02 = Dense(16, kernel_regularizer=regularizers.l2(0.01))(dense02)
-        dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
-        dense02 = Activation('tanh')(dense02)
-        dense02 = Dense(8, kernel_regularizer=regularizers.l2(0.01))(dense02)
-        dense02 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense02)
-        dense02 = Activation('tanh')(dense02)
-        output = Dense(glo.action_size, name='output', activation='tanh')(dense02)
-        model = Model(inputs=[input_stock_state, input_agent_state,input_price_state], outputs=[output])
+        x_stock_state = SeparableConv1D(filters=64, kernel_size=4, padding='valid', data_format='channels_first')(input_stock_state)
+        x_stock_state = BatchNormalization(epsilon=1e-4, scale=True, center=True)(x_stock_state)
+        x_stock_state = Activation('tanh')(x_stock_state)
+        x_stock_state = SeparableConv1D(filters=32, kernel_size=3, padding='valid', data_format='channels_first')(x_stock_state)
+        x_stock_state = BatchNormalization(epsilon=1e-4, scale=True, center=True)(x_stock_state)
+        x_stock_state = Activation('tanh')(x_stock_state)
+        x_stock_state = CuDNNLSTM_res_block3(x_stock_state, (16, 32))
+        x_stock_state = CuDNNLSTM_res_block3(x_stock_state, (8, 16))
+        x_stock_state = CuDNNLSTM_res_block3(x_stock_state, (8, 8))
+        x_stock_state = CuDNNLSTM_res_block3(x_stock_state, (8, 8))
+        x_stock_state = CuDNNLSTM_res_block3(x_stock_state, (32, 8))
+        x_stock_state = BatchNormalization(epsilon=1e-4, scale=True, center=True)(x_stock_state)
+        x_stock_state = Activation('tanh')(x_stock_state)
+        x_stock_state = SeparableConv1D(filters=16, kernel_size=3, padding='valid', data_format='channels_first')(x_stock_state)
+        x_stock_state = BatchNormalization(epsilon=1e-4, scale=True, center=True)(x_stock_state)
+        x_stock_state = Activation('tanh')(x_stock_state)
+        x_stock_state = CuDNNLSTM_res_block2(x_stock_state, (16,))
+        x_stock_state = SeparableConv1D(filters=16, kernel_size=1, padding='valid', data_format='channels_first')(x_stock_state)
+        x_stock_state = BatchNormalization(epsilon=1e-4, scale=True, center=True)(x_stock_state)
+        x_stock_state = Activation('tanh')(x_stock_state)
+        switch_stock_state = Conv1D_res_block3(x_stock_state, (16, 8))
+        # switch_stock_state = Flatten()(switch_stock_state)
+        switch_stock_state = AveragePooling1D(pool_size=2, strides=16, padding='valid', data_format='channels_last')(switch_stock_state)
+        switch_stock_state = Reshape((12,))(switch_stock_state)
+        switch_stock_state = Dense_res_block3(switch_stock_state, (16, 8))
+        switch_stock_state = Dense_res_block3(switch_stock_state, (16, 8))
+        switch_stock_state = Dense_res_block3(switch_stock_state, (16, 8))
+        action1 = Dense_res_block3(switch_stock_state, (8, 8))
+        action1 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(action1)
+        action1 = Activation('tanh')(action1)
+        action1 = Dense_BN(action1, 1)
+        feature_stock_state = Conv1D_res_block3(x_stock_state, (16, 4), (3, 3, 3))
+        feature_stock_state = Conv1D_res_block3(feature_stock_state, (4, 4), (1, 1, 1), zeropadding=False)
+        feature_stock_state = Conv1D_res_block3(feature_stock_state, (4, 4), (3, 3, 3))
+        # feature_stock_state = Flatten()(feature_stock_state)
+        feature_stock_state = AveragePooling1D(pool_size=2, strides=16, padding='valid', data_format='channels_last')(feature_stock_state)
+        feature_stock_state = Reshape((12,))(feature_stock_state)
+        feature_stock_state = Dense_res_block3(feature_stock_state, (8, 8))
+        feature_stock_state = Dense_res_block3(feature_stock_state, (16, 8))
+        feature_stock_state = Dense_res_block3(feature_stock_state, (16, 8))
+        merge_layer = Concatenate()([feature_stock_state, input_agent_state_, input_price_state])
+        action0 = Dense_res_block3(merge_layer, (16, 8))
+        action0 = Dense_res_block3(action0, (4, 4))
+        action0 = BatchNormalization(epsilon=1e-4, scale=True, center=True)(action0)
+        action0 = Activation('tanh')(action0)
+        action0 = Dense_BN(action0, 1)
+        output = Concatenate()([action0, action1])
+        output = BatchNormalization(epsilon=1e-4, scale=True, center=True)(output)
+        output = Activation('tanh')(output)
+        model = Model(inputs=[input_stock_state, input_agent_state, input_price_state], outputs=[output])
         plot_model(model, to_file='actor_net.png', show_shapes=True)
         return model, model.trainable_weights, input_stock_state, input_agent_state, input_price_state

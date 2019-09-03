@@ -46,7 +46,7 @@ def execute_model(m):
     flag = True
     start_time = datetime.now()
     while flag:
-        if (datetime.now() - start_time).seconds >= 120:
+        if (datetime.now() - start_time).seconds >= 600:
             print("thread_flag:" + str(thread_flag))
             print("time_stamp:" + str(time_stamp.value))
             for thread in thread_list:
@@ -79,14 +79,15 @@ def train_model():
     global multi_episode
     global flag_lock
     # 建立经验池
-    ep_dict = {'low':Experience_pool('low'), 'mid':Experience_pool('mid'), 'high':Experience_pool('high')}
+    ep_dict = {'low': Experience_pool('low'), 'mid': Experience_pool('mid'), 'high': Experience_pool('high')}
     # 载入经验池
     for ep in list(ep_dict.values()):
         ep.load()
     print("建立模型")
     # 建立模型
     for i in range(glo.agent_num):
-        thread_list[i] = ACModel(i, model, thread_flag, ep_dict, time_stamp, multi_episode, multi_step, glo.data, glo.date,
+        thread_list[i] = ACModel(i, model, thread_flag, ep_dict, time_stamp, multi_episode, multi_step, glo.data,
+                                 glo.date,
                                  glo.dict, glo.day_data, glo.scaler, glo.min_scaler, flag_lock, obs, sys_model)
         # thread_list[i].daemon=True
     execute_model('i')
@@ -104,8 +105,12 @@ def train_model():
             flag = False
             obs.value = 'f'
             pause_reset = False
-            while len(ep_dict['low'].exp_pool) <= glo.experience_pool_size or len(ep_dict['mid'].exp_pool) <= glo.experience_pool_size or len(ep_dict['high'].exp_pool) <= glo.experience_pool_size:
-                if (len(ep_dict['low'].exp_pool) < glo.experience_pool_size or len(ep_dict['mid'].exp_pool) < glo.experience_pool_size or len(ep_dict['high'].exp_pool) < glo.experience_pool_size) and sys_model != "run":
+            while len(ep_dict['low'].exp_pool) <= glo.experience_pool_size or len(
+                    ep_dict['mid'].exp_pool) <= glo.experience_pool_size or len(
+                ep_dict['high'].exp_pool) <= glo.experience_pool_size:
+                if (len(ep_dict['low'].exp_pool) < glo.experience_pool_size or len(
+                        ep_dict['mid'].exp_pool) < glo.experience_pool_size or len(
+                    ep_dict['high'].exp_pool) < glo.experience_pool_size) and sys_model != "run":
                     # 观察环境模式
                     flag = True
                     obs.value = 't'
@@ -125,7 +130,13 @@ def train_model():
                         # 否则,启动下一episode
                         pause_reset = True
                         break
-                if len(ep_dict['low'].exp_pool) == glo.experience_pool_size and len(ep_dict['mid'].exp_pool) == glo.experience_pool_size and len(ep_dict['high'].exp_pool) == glo.experience_pool_size:
+                if len(ep_dict['high'].exp_pool) != 0 and len(
+                        ep_dict['high'].exp_pool) != glo.experience_pool_size and len(ep_dict['high'].exp_pool) % (
+                        glo.experience_pool_size / 5) == 0:
+                    save_experience_pool(ep_dict)
+                if len(ep_dict['low'].exp_pool) == glo.experience_pool_size and \
+                        len(ep_dict['mid'].exp_pool) == glo.experience_pool_size and \
+                        len(ep_dict['high'].exp_pool) == glo.experience_pool_size:
                     if flag:
                         print("观察完成")
                         obs.value = 'f'
@@ -141,8 +152,9 @@ def train_model():
         # 保存经验池
         if episode % (glo.train_times / glo.save_exp_frequency) == 0 and episode != 0 and sys_model != "run":
             save_experience_pool(ep_dict)
-        # 每个episode保存权重
-        execute_model('s')
+        # 每10个episode保存权重
+        if episode != 0 and episode % 20 == 0:
+            execute_model('s')
     # 终止所有进程
     # print("终止进程")
     # execute_model('e')
@@ -165,7 +177,8 @@ def run_model():
     print("建立模型")
     # 建立模型
     for i in range(glo.agent_num):
-        thread_list[i] = ACModel(i, model, thread_flag, ep_dict, time_stamp, multi_episode, multi_step, glo.data, glo.date,
+        thread_list[i] = ACModel(i, model, thread_flag, ep_dict, time_stamp, multi_episode, multi_step, glo.data,
+                                 glo.date,
                                  glo.dict, glo.day_data, glo.scaler, glo.min_scaler, flag_lock, obs, sys_model)
         # thread_list[i].daemon=True
     execute_model('i')
@@ -182,7 +195,7 @@ def save_experience_pool(ep_dict):
     for ep in list(ep_dict.values()):
         with open("Data/experience_pool_" + str(ep.level) + ".json", "w", encoding='UTF-8') as f:
             exp_list = []
-            for i in range(glo.experience_pool_size):
+            for i in range(len(ep.exp_pool)):
                 exp_list.append(ep.exp_pool[i])
             json.dump(exp_list, f, default=lambda obj: obj.__dict__)
     print("经验存储完成")

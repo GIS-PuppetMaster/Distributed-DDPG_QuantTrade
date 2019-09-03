@@ -2,7 +2,6 @@ from sklearn.preprocessing import *
 from StockDate import *
 import numpy as np
 import math
-import talib as ta
 
 
 # auth("13074581737", "trustno1")
@@ -178,7 +177,7 @@ class Env:
         :return: 下一状态的stock_state,agent_state,reward,本次交易量
         """
         """action:买入股票,stock股票代码,quant卖出手数"""
-        # self.temp_date.set_date(self.gdate.get_date())
+        self.temp_date.set_date(self.gdate.get_date())
         now_date = self.gdate.get_date()
         quant = 0
         flag = False
@@ -238,8 +237,22 @@ class Env:
             self.price_list.append(self.price)
 
         """计算奖励"""
+        # 以后5天收盘滑动平均作为估计标准(不包括当天）
+        # 如果后面不足5天则判定over_flow = True
+        for k in range(5):
+            d, over_flow = self.temp_date.next_day()
+            if over_flow:
+                break
         # 计算下一时刻期望毛利润
-        next_date_profit = self.money + self.get_stock_total_value(self.get_stock_price(next_date))
+        index = 0
+        s = str(self.temp_date.get_date())
+        s_list = list(s)
+        for i in range(0, len(s_list)):
+            if s_list[i] == " ":
+                index = i
+                break
+        avr_price = self.day_data.loc[s[0:index]]['close_5_sma']
+        next_date_profit = self.money + self.get_stock_total_value(avr_price)
         # 更新历史最高毛利润
         if next_date_profit >= self.max_profit:
             self.max_profit = next_date_profit
@@ -253,12 +266,14 @@ class Env:
         # 添加惩罚项
         if flag:
             # 惩罚
-            reward -= abs(action_0) * 10
+            reward -= abs(action_0)
         # 交易历史日期不为空且当前距离上一次交易超过15天 或者 当前交易历史日期为空且当前日期距离开始日期超过15天
         if len(self.time_list) != 0 and (now_date - self.last_trade).days >= 15:
-            reward -= abs(action[1]) * (now_date - self.last_trade).days
+            # reward -= abs(action[1]) * (now_date - self.last_trade).days
+            reward -= abs(action[1])
         if len(self.time_list) == 0 and (now_date - self.start_date).days >= 15:
-            reward -= abs(action[1]) * (now_date - self.start_date).days
+            # reward -= abs(action[1]) * (now_date - self.start_date).days
+            reward -= abs(action[1])
         """
         reward = (next_date_profit - self.ori_money - self.ori_value) / (self.ori_money + self.ori_value)
         if flag:

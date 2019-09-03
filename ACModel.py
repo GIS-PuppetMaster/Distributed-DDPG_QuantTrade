@@ -14,10 +14,11 @@ from datetime import *
 
 
 class ACModel(Process):
-    def __init__(self, index, mode, thread_flag, ep_dict, time_stamp, episode, step, _data, _date, _dict, _day_data, _scaler,
+    def __init__(self, index, mode, thread_flag, ep_dict, time_stamp, episode, step, _data, _date, _dict, _day_data,
+                 _scaler,
                  _min_scaler, lock, obs, sys_model):
         self.index = index
-        self.env = Env(stock_code='000517.XSHE', scaler=_scaler, min_scaler=_min_scaler)
+        self.env = Env(stock_code=glo.stock_code_list[0], scaler=_scaler, min_scaler=_min_scaler)
         self.sess = None
         self.actor = None
         self.critic = None
@@ -57,6 +58,15 @@ class ACModel(Process):
         index = self.index
         self.actor = ActorNetwork(sess)
         self.critic = CriticNetwork(sess)
+        """
+        dis = 'Model/Agent编号'+str(self.index)
+        if not os.path.exists(dis):
+            os.makedirs(dis)
+        self.actor.model.save(dis+'/actor.h5')
+        self.actor.target_model.save(dis+'/target_actor.h5')
+        self.critic.model.save(dis + '/critic.h5')
+        self.critic.target_model.save(dis + '/target_critic.h5')
+        """
         path = "最新训练权重/Agent编号" + str(index) + "/main_actor_weights.h5"
         if os.path.exists(path):
             print("载入权重main_actor_weights.h5")
@@ -90,7 +100,8 @@ class ACModel(Process):
         mid_stock_state_, mid_agent_state_, mid_price_state_, mid_action_, mid_reward_, mid_next_stock_state_, mid_next_agent_state_, mid_next_price_state_ = \
             self.ep_dict['mid'].get_info_from_experience_list(self.ep_dict['mid'].get_experience_batch(mid_batch_size))
         high_stock_state_, high_agent_state_, high_price_state_, high_action_, high_reward_, high_next_stock_state_, high_next_agent_state_, high_next_price_state_ = \
-            self.ep_dict['high'].get_info_from_experience_list(self.ep_dict['high'].get_experience_batch(high_batch_size))
+            self.ep_dict['high'].get_info_from_experience_list(
+                self.ep_dict['high'].get_experience_batch(high_batch_size))
         return low_stock_state_ + mid_stock_state_ + high_stock_state_, low_agent_state_ + mid_agent_state_ + high_agent_state_, low_price_state_ + mid_price_state_ + high_price_state_, low_action_ + mid_action_ + high_action_, low_reward_ + mid_reward_ + high_reward_, low_next_stock_state_ + mid_next_stock_state_ + high_next_stock_state_, low_next_agent_state_ + mid_next_agent_state_ + high_next_agent_state_, low_next_price_state_ + mid_next_price_state_ + high_next_price_state_
 
     def train_nn(self):
@@ -109,8 +120,14 @@ class ACModel(Process):
         a_for_grad = self.actor.model.predict([stock_state_, agent_state_, price_state_])
         # print("编号" + str(self.index) + "生成梯度")
         grads = self.critic.gradients(stock_state_, agent_state_, price_state_, a_for_grad)
+
         # print("编号" + str(self.index) + "梯度\n" + str(grads))
         # print("编号" + str(self.index) + "训练actor")
+        dis = "E:/运行结果"
+        if not os.path.exists(dis):
+            os.makedirs(dis)
+        with open(dis + "/Agent编号" + str(self.index) + '.log','w') as f:
+            f.write(str(grads))
         self.actor.train(stock_state_, agent_state_, price_state_, grads)
         # print("编号" + str(self.index) + "更新target")
         # 更新参数
@@ -154,9 +171,9 @@ class ACModel(Process):
                                         [[float(str(reward))]],
                                         next_stock_state,
                                         next_agent_state, next_price_state)
-                if reward < -0.3:
+                if reward <= 0:
                     self.ep_dict['low'].append_experience(experience)
-                elif -0.3 <= reward <= 0.3:
+                elif 0 < reward <= 0.2:
                     self.ep_dict['mid'].append_experience(experience)
                 else:
                     self.ep_dict['high'].append_experience(experience)
@@ -368,8 +385,8 @@ class ACModel(Process):
                 "data": [loss_scatter],
                 "layout": go.Layout(
                     title="loss 编号" + str(self.index),
-                    xaxis=dict(title='训练次数', showgrid=False, zeroline=False),
-                    yaxis=dict(title='loss', showgrid=False, zeroline=False),
+                    xaxis=dict(title='训练次数', showgrid=False, zeroline=True),
+                    yaxis=dict(title='loss', showgrid=False, zeroline=True),
                     paper_bgcolor='#FFFFFF',
                     plot_bgcolor='#FFFFFF'
                 )
@@ -385,8 +402,8 @@ class ACModel(Process):
                 "data": [reward_scatter],
                 "layout": go.Layout(
                     title="reward 编号" + str(self.index),
-                    xaxis=dict(title='训练次数', showgrid=False, zeroline=False),
-                    yaxis=dict(title='reward', showgrid=False, zeroline=False),
+                    xaxis=dict(title='训练次数', showgrid=False, zeroline=True),
+                    yaxis=dict(title='reward', showgrid=False, zeroline=True),
                     paper_bgcolor='#FFFFFF',
                     plot_bgcolor='#FFFFFF'
                 )

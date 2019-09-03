@@ -37,7 +37,7 @@ class StockDate:
         self.date = datetime.strptime(self.date_list[next_index], "%Y-%m-%d %H:%M:%S")
         self.index = next_index
         # 如果下一步溢出则返回None
-        if self.index + frequency >= len(self.date_list):
+        if self.index + frequency >= len(self.date_list) or self.index == len(self.date_list) - 1:
             return self.date, True
         return self.date, False
 
