@@ -96,11 +96,13 @@ def Conv1D_conv_block(input, filters=(3, 3, 3), kernel_size=3, strides=1,
     conv03_ac = Activation(activation[2], name=block_name+'conv03_ac')(merge03)
     return conv03_ac
 
-def Dense_layer_connect(input, units=8):
+def Dense_layer_connect(input, size, units=8):
     from keras.layers import Concatenate,Dense,BatchNormalization,Activation,Flatten,Reshape
     from keras import regularizers
-    dense0 = Dense(units, kernel_regularizer=regularizers.l2(0.01))(input)
-    dense0_bn = BatchNormalization(axis=1, epsilon=1e-4, scale=True, center=True)(dense0)
+    # 升维，增加深度轴
+    input_ = Reshape((1, size))(input)
+    dense0 = Dense(units, kernel_regularizer=regularizers.l2(0.01))(input_)
+    dense0_bn = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense0)
     dense0 = Activation('tanh')(dense0_bn)
 
     dense1 = Dense(units, kernel_regularizer=regularizers.l2(0.01))(dense0)
@@ -109,6 +111,7 @@ def Dense_layer_connect(input, units=8):
 
     dense2 = Dense(units, kernel_regularizer=regularizers.l2(0.01))(dense1)
     dense2_bn = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense2)
+    # 在深度轴上合并
     add2 = Concatenate(axis=1)([dense0_bn, dense2_bn])
     dense2 = Activation('tanh')(add2)
 
@@ -116,4 +119,6 @@ def Dense_layer_connect(input, units=8):
     dense3_bn = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense3)
     add3 = Concatenate(axis=1)([dense0_bn, dense1_bn, dense3_bn])
     dense3 = Activation('tanh')(add3)
-    return dense3
+    # 降维展平
+    flatten = Flatten()(dense3)
+    return flatten

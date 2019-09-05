@@ -84,7 +84,7 @@ class CriticNetwork(object):
         x_stock_state = AveragePooling1D(pool_size=4, strides=2, data_format='channels_first')(x_stock_state)
         x_stock_state = Flatten()(x_stock_state)
         merge = Concatenate()([x_stock_state, input_price_state, input_agent_state_, input_action])
-        layer = Dense_layer_connect(merge, units=16)
+        layer = Dense_layer_connect(merge, units=16, size=35)
         layer = Dense_BN(layer, units=32)
         layer = Dense_BN(layer, units=8)
         output = Dense(1)(layer)
