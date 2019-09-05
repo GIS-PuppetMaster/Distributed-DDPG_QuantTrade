@@ -9,8 +9,7 @@ import glo
 import plotly as py
 import plotly.graph_objs as go
 import random
-import sys
-from datetime import *
+from keract import *
 
 
 class ACModel(Process):
@@ -142,11 +141,32 @@ class ACModel(Process):
         if self.obs.value == 'f':
             self.actor.apply_noise()
             # print("编号" + str(self.index) + "预测动作")
+            """
+            print('stock_state:'+str(self.stock_state))
+            print('price_state:'+str(self.price_state))
+            print('agent_state:'+str(self.agent_state))
+            """
             action = self.actor.model.predict([self.stock_state, self.agent_state, self.price_state])[0]
             print("编号" + str(self.index) + "action:" + str(action))
+
+            """
+            model = self.actor.model
+            inp = [np.array(self.stock_state), np.array(self.agent_state), np.array(self.price_state)]
+            act = get_activations(model, inp)
+            # print(str(act))
+            display_activations(act, cmap="gray", save=True, dir='Agent'+str(self.index)+'/step'+str(self.step.value)+'/')
+            """
+            """
+            dis = "E:/运行结果"
+            if not os.path.exists(dis):
+                os.makedirs(dis)
+            with open(dis + "/Agent编号" + str(self.index) + '.log', 'w') as f:
+                f.write(str(get_activations(model, [np.array(self.stock_state), np.array(self.agent_state), np.array(self.price_state)])))
+            """
             # TODO:完成ES噪声算法后删除
             # print("编号" + str(self.index) + "添加噪声")
-            if self.sys_model != 'run':
+            epsilon = random.randint(0, 10)
+            if self.sys_model != 'run' and epsilon < glo.epsilon:
                 action += np.random.randn(2, ) * 0.01
                 if action[0] > 1:
                     action[0] = 1
@@ -387,8 +407,8 @@ class ACModel(Process):
                 "data": [loss_scatter],
                 "layout": go.Layout(
                     title="loss 编号" + str(self.index),
-                    xaxis=dict(title='训练次数', showgrid=False, zeroline=True),
-                    yaxis=dict(title='loss', showgrid=False, zeroline=True),
+                    xaxis=dict(title='训练次数', showgrid=True, zeroline=True),
+                    yaxis=dict(title='loss', showgrid=True, zeroline=True),
                     paper_bgcolor='#FFFFFF',
                     plot_bgcolor='#FFFFFF'
                 )
@@ -404,8 +424,8 @@ class ACModel(Process):
                 "data": [reward_scatter],
                 "layout": go.Layout(
                     title="reward 编号" + str(self.index),
-                    xaxis=dict(title='训练次数', showgrid=False, zeroline=True),
-                    yaxis=dict(title='reward', showgrid=False, zeroline=True),
+                    xaxis=dict(title='训练次数', showgrid=True, zeroline=True),
+                    yaxis=dict(title='reward', showgrid=True, zeroline=True),
                     paper_bgcolor='#FFFFFF',
                     plot_bgcolor='#FFFFFF'
                 )

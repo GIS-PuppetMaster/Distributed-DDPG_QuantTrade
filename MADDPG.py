@@ -4,6 +4,7 @@ from StockDate import *
 import multiprocessing
 from Experience_pool import Experience_pool
 import os
+import time
 
 
 # f = open('trade.log', 'a')
@@ -26,6 +27,7 @@ def execute_model(m):
             # value必须倒数第二个设置
             model.value = m
             # time_stamp最后设置，表示命令已更新
+        time.sleep(0.1)
         if time_stamp.value < 1000:
             time_stamp.value += 1
         else:
@@ -36,6 +38,7 @@ def execute_model(m):
         print("执行模型操作：" + m)
         for i in range(glo.agent_num):
             model.value = m
+        time.sleep(0.1)
         if time_stamp.value < 1000:
             time_stamp.value += 1
         else:
@@ -46,12 +49,23 @@ def execute_model(m):
     flag = True
     start_time = datetime.now()
     while flag:
-        if (datetime.now() - start_time).seconds >= 600:
+        """
+        if (datetime.now() - start_time).seconds >= 120 and m != 's' and m!='i':
             print("thread_flag:" + str(thread_flag))
             print("time_stamp:" + str(time_stamp.value))
+            print("紧急保存权重")
+            m = 's'
+            for i in range(glo.agent_num):
+                model.value = m
+            time.sleep(0.1)
+            if time_stamp.value < 1000:
+                time_stamp.value += 1
+            else:
+                time_stamp.value = 0
             for thread in thread_list:
                 thread.terminate()
             os._exit(1)
+        """
         flag = False
         # print(str(thread_flag))
         pause_counter = 0
@@ -108,9 +122,9 @@ def train_model():
             while len(ep_dict['low'].exp_pool) <= glo.experience_pool_size or len(
                     ep_dict['mid'].exp_pool) <= glo.experience_pool_size or len(
                 ep_dict['high'].exp_pool) <= glo.experience_pool_size:
-                if (len(ep_dict['low'].exp_pool) < glo.experience_pool_size or len(
-                        ep_dict['mid'].exp_pool) < glo.experience_pool_size or len(
-                    ep_dict['high'].exp_pool) < glo.experience_pool_size) and sys_model != "run":
+                if (len(ep_dict['low'].exp_pool) < glo.mini_batch_size*10 or len(
+                        ep_dict['mid'].exp_pool) < glo.mini_batch_size*10 or len(
+                    ep_dict['high'].exp_pool) < glo.mini_batch_size*10) and sys_model != "run":
                     # 观察环境模式
                     flag = True
                     obs.value = 't'
@@ -134,9 +148,9 @@ def train_model():
                         ep_dict['high'].exp_pool) != glo.experience_pool_size and len(ep_dict['high'].exp_pool) % (
                         glo.experience_pool_size / 5) == 0:
                     save_experience_pool(ep_dict)
-                if len(ep_dict['low'].exp_pool) == glo.experience_pool_size and \
-                        len(ep_dict['mid'].exp_pool) == glo.experience_pool_size and \
-                        len(ep_dict['high'].exp_pool) == glo.experience_pool_size:
+                if len(ep_dict['low'].exp_pool) >= glo.mini_batch_size*10 and \
+                        len(ep_dict['mid'].exp_pool) >= glo.mini_batch_size*10 and \
+                        len(ep_dict['high'].exp_pool) >= glo.mini_batch_size*10:
                     if flag:
                         print("观察完成")
                         obs.value = 'f'
@@ -153,7 +167,7 @@ def train_model():
         if episode % (glo.train_times / glo.save_exp_frequency) == 0 and episode != 0 and sys_model != "run":
             save_experience_pool(ep_dict)
         # 每10个episode保存权重
-        if episode != 0 and episode % 20 == 0:
+        if episode != 0 and episode % 5 == 0:
             execute_model('s')
     # 终止所有进程
     # print("终止进程")
@@ -203,7 +217,7 @@ def save_experience_pool(ep_dict):
 
 if __name__ == '__main__':
     # 全局变量
-    model = multiprocessing.Value('u', 'i')
+    model = multiprocessing.Value('u', 'i', lock=False)
     obs = multiprocessing.Value('u', 'f')
     multi_episode = multiprocessing.Value('L', 0)
     multi_step = multiprocessing.Value('L', 0)

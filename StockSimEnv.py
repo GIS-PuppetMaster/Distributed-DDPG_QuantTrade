@@ -139,7 +139,7 @@ class Env:
         # 归一化
         agent_state[agent_state <= 0] = 0.0000001
         # agent_state = np.tanh(np.log10(agent_state))
-        agent_state = np.log10(agent_state)
+        agent_state = np.log10(agent_state)/10
         # agent_state = agent_state.reshape(-1, 1).tolist()
         # 归一化
         # agent_state = MinMaxScaler().fit_transform(scale(agent_state, axis=0))

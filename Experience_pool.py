@@ -66,7 +66,7 @@ class Experience_pool():
         获取经验训练包
         :return: 从经验池中随机采样的经验训练包
         """
-        index_list = [i for i in range(0, glo.experience_pool_size - 1)]
+        index_list = [i for i in range(0, len(self.exp_pool))]
         sample_index_list = random.sample(index_list, batch_size)
         res = []
         for i in sample_index_list:
@@ -84,7 +84,7 @@ class Experience_pool():
                 s = f.read()
                 try:
                     exp_list = json.loads(s, object_hook=Experience.object_hook)
-                    for i in range(glo.experience_pool_size):
+                    for i in range(len(exp_list)):
                         self.exp_pool.append(exp_list[i])
                     print("已载入经验池")
                 except:

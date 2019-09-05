@@ -13,7 +13,7 @@ count = 32
 """
 frequency = '30' + 'm'
 """"""
-day = 30
+day = 10
 # , '000938.XSHE', '600094.XSHG', '600519.XSHG', '601318.XSHG'
 stock_code_list = ['000517.XSHE']
 # stock_code_list = ['601318.XSHG']
@@ -21,8 +21,8 @@ stock_code_list = ['000517.XSHE']
 train_times = 1000
 train_step = 500
 gamma = 0.99
-mini_batch_size = 64
-experience_pool_size = 20000
+mini_batch_size = 32
+experience_pool_size = 1000000
 low_rate = 2
 mid_rate = 3
 high_rate = 5
@@ -33,7 +33,7 @@ agent_state_size = 3
 price_state_size = 6
 action_size = 2
 epsilon = 0.1
-agent_num = 8
+agent_num = 1
 actor_learning_rate = 0.05
 critic_learning_rate = 0.001
 # 每轮训练画多少次图像

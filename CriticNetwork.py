@@ -41,9 +41,9 @@ class CriticNetwork(object):
         from keras import regularizers
         from keras.optimizers import Adam
         from MyKerasTool import Dense_res_block3
-        from MyKerasTool import Dense_block_sparse
-        from MyKerasTool import Conv1D_res_block2
-        from MyKerasTool import Conv1D_res_block3
+        from MyKerasTool import Dense_layer_connect
+        from MyKerasTool import Conv1D_conv_block
+        from MyKerasTool import Conv1D_identity_block
         from MyKerasTool import CuDNNLSTM_res_block2
         from MyKerasTool import CuDNNLSTM_res_block3
         from MyKerasTool import Dense_BN
@@ -55,52 +55,40 @@ class CriticNetwork(object):
            """
         input_stock_state = Input(shape=(glo.day, glo.stock_state_size))
         input_agent_state = Input(shape=(glo.agent_state_size,))
-        input_agent_state_ = BatchNormalization(epsilon=1e-4, scale=True, center=True)(input_agent_state)
+        input_agent_state_ = BatchNormalization(axis=1, epsilon=1e-4, scale=True, center=True)(input_agent_state)
         input_price_state = Input(shape=(glo.price_state_size,))
         input_action = Input(shape=(glo.action_size,))
-        x_stock_state = SeparableConv1D(filters=64, kernel_size=4, padding='valid', data_format='channels_first')(
+        x_stock_state = CuDNNLSTM(64, kernel_regularizer=regularizers.l2(0.01), return_sequences=True)(
             input_stock_state)
         x_stock_state = BatchNormalization(epsilon=1e-4, scale=True, center=True)(x_stock_state)
         x_stock_state = Activation('tanh')(x_stock_state)
-        x_stock_state = SeparableConv1D(filters=32, kernel_size=3, padding='valid', data_format='channels_first')(
-            x_stock_state)
-        x_stock_state = BatchNormalization(epsilon=1e-4, scale=True, center=True)(x_stock_state)
-        x_stock_state = Activation('tanh')(x_stock_state)
-        x_stock_state = CuDNNLSTM_res_block3(x_stock_state, (16, 32))
-        x_stock_state = CuDNNLSTM_res_block3(x_stock_state, (8, 16))
-        x_stock_state = CuDNNLSTM_res_block3(x_stock_state, (8, 8))
-        x_stock_state = CuDNNLSTM_res_block3(x_stock_state, (8, 8))
-        x_stock_state = CuDNNLSTM_res_block3(x_stock_state, (32, 8))
-        x_stock_state = BatchNormalization(epsilon=1e-4, scale=True, center=True)(x_stock_state)
-        x_stock_state = Activation('tanh')(x_stock_state)
-        x_stock_state = SeparableConv1D(filters=16, kernel_size=3, padding='valid', data_format='channels_first')(
-            x_stock_state)
-        x_stock_state = BatchNormalization(epsilon=1e-4, scale=True, center=True)(x_stock_state)
-        x_stock_state = Activation('tanh')(x_stock_state)
-        x_stock_state = CuDNNLSTM_res_block2(x_stock_state, (16,))
-        x_stock_state = SeparableConv1D(filters=16, kernel_size=1, padding='valid', data_format='channels_first')(
-            x_stock_state)
-        x_stock_state = BatchNormalization(epsilon=1e-4, scale=True, center=True)(x_stock_state)
-        x_stock_state = Activation('tanh')(x_stock_state)
-        feature_stock_state = Conv1D_res_block3(x_stock_state, (16, 4), (3, 3, 3))
-        feature_stock_state = Conv1D_res_block3(feature_stock_state, (4, 4), (1, 1, 1), zeropadding=False)
-        feature_stock_state = Conv1D_res_block3(feature_stock_state, (4, 4), (3, 3, 3))
-        # feature_stock_state = Flatten()(feature_stock_state)
-        feature_stock_state = AveragePooling1D(pool_size=2, strides=16, padding='valid', data_format='channels_last')(
-            feature_stock_state)
-        feature_stock_state = Reshape((12,))(feature_stock_state)
-        feature_stock_state = Dense_res_block3(feature_stock_state, (8, 8))
-        feature_stock_state = Dense_res_block3(feature_stock_state, (16, 8))
-        feature_stock_state = Dense_res_block3(feature_stock_state, (16, 8))
-        merge_layer = Concatenate()([feature_stock_state, input_agent_state_, input_price_state, input_action])
-        analysis = Dense_res_block3(merge_layer, layercell=(16, 16))
-        analysis = Dense_res_block3(analysis, layercell=(16, 8))
-        analysis = Dense_res_block3(analysis, layercell=(8, 8))
-        analysis = Dense_res_block3(analysis, layercell=(8, 8))
-        analysis = BatchNormalization(epsilon=1e-4, scale=True, center=True)(analysis)
-        analysis = Activation('tanh')(analysis)
-        output = Dense(1, kernel_regularizer=regularizers.l2(0.01))(analysis)
+
+        x_stock_state = Conv1D_conv_block(x_stock_state, filters=(32, 8, 32), block_name='stage1_conv-')
+        for i in range(2):
+            x_stock_state = Conv1D_identity_block(x_stock_state, filters=(32, 16, 32), block_name='stage1_identity_' + str(i) + '-')
+
+        x_stock_state = Conv1D_conv_block(x_stock_state, filters=(16, 4, 16), strides=2, block_name='stage2_conv-')
+        for i in range(3):
+            x_stock_state = Conv1D_identity_block(x_stock_state, filters=(16, 8, 16), block_name='stage2_identity_' + str(i) + '-')
+
+        # x_stock_state = Dense_layer_connect(x_stock_state, units=16)
+
+        x_stock_state = Conv1D_conv_block(x_stock_state, filters=(16, 4, 16), strides=2, block_name='stage3_conv-')
+        for i in range(5):
+            x_stock_state = Conv1D_identity_block(x_stock_state, filters=(8, 8, 16), block_name='stage3_identity_' + str(i) + '-')
+
+        x_stock_state = Conv1D_conv_block(x_stock_state, filters=(16, 8, 8), strides=2, block_name='stage4_conv-')
+        for i in range(2):
+            x_stock_state = Conv1D_identity_block(x_stock_state, filters=(4, 4, 8), block_name='stage4_identity_' + str(i) + '-')
+
+        x_stock_state = AveragePooling1D(pool_size=4, strides=2, data_format='channels_first')(x_stock_state)
+        x_stock_state = Flatten()(x_stock_state)
+        merge = Concatenate()([x_stock_state, input_price_state, input_agent_state_, input_action])
+        layer = Dense_layer_connect(merge, units=16)
+        layer = Dense_BN(layer, units=32)
+        layer = Dense_BN(layer, units=8)
+        output = Dense(1)(layer)
         model = Model(inputs=[input_stock_state, input_agent_state, input_price_state, input_action], outputs=[output])
-        model.compile(optimizer=Adam(glo.critic_learning_rate), loss='mse')
+        model.compile(optimizer=Adam(self.LEARNING_RATE), loss='mse')
         plot_model(model, to_file='critic_net.png', show_shapes=True)
         return model, model.trainable_weights, input_stock_state, input_agent_state, input_price_state, input_action
