@@ -10,12 +10,12 @@ import plotly as py
 import plotly.graph_objs as go
 import random
 from keract import *
-
+from pynput.keyboard import Key, Controller
+from pynput import keyboard
 
 class ACModel(Process):
     def __init__(self, index, mode, thread_flag, ep_dict, time_stamp, episode, step, _data, _date, _dict, _day_data,
-                 _scaler,
-                 _min_scaler, lock, obs, sys_model):
+                 _scaler, _min_scaler, lock, sys_model):
         self.index = index
         self.env = Env(stock_code=glo.stock_code_list[0], scaler=_scaler, min_scaler=_min_scaler)
         self.sess = None
@@ -34,7 +34,6 @@ class ACModel(Process):
         self.dict = _dict
         self.day_data = _day_data
         self.lock = lock
-        self.obs = obs
         self.reset_counter = 0
         self.step_loss_list = []
         self.reward_list = []
@@ -42,10 +41,22 @@ class ACModel(Process):
         self.scaler = _scaler
         self.min_scaler = _min_scaler
         self.sys_model = sys_model
+        self.draw_hide_layer = False
+        keyboard.Listener(on_press=self.on_press, on_release=self.on_release).start()
         Process.__init__(self)
+
+    def on_press(self, key):
+        pass
+
+    def on_release(self, key):
+        if key == Key.f2:
+            self.draw_hide_layer = True
+
+
 
     def init_env(self):
         self.env = Env(stock_code='000517.XSHE', scaler=self.scaler, min_scaler=self.min_scaler)
+
 
     def init_nn(self):
         import tensorflow as tf
@@ -69,19 +80,31 @@ class ACModel(Process):
         path = "最新训练权重/Agent编号" + str(index) + "/main_actor_weights.h5"
         if os.path.exists(path):
             print("载入权重main_actor_weights.h5")
-            self.actor.model.load_weights(path)
+            try:
+                self.actor.model.load_weights(path)
+            except:
+                print("权重载入错误，随机初始化模型")
         path = "最新训练权重/Agent编号" + str(index) + "/target_actor_weights.h5"
         if os.path.exists(path):
             print("载入权重target_actor_weights.h5")
-            self.actor.target_model.load_weights(path)
+            try:
+                self.actor.target_model.load_weights(path)
+            except:
+                print("权重载入错误，随机初始化模型")
         path = "最新训练权重/Agent编号" + str(index) + "/main_critic_weights.h5"
         if os.path.exists(path):
             print("载入权重main_critic_weights.h5")
-            self.critic.model.load_weights(path)
+            try:
+                self.critic.model.load_weights(path)
+            except:
+                print("权重载入错误，随机初始化模型")
         path = "最新训练权重/Agent编号" + str(index) + "/target_critic_weights.h5"
         if os.path.exists(path):
             print("载入权重target_critic_weights.h5")
-            self.critic.target_model.load_weights(path)
+            try:
+                self.critic.target_model.load_weights(path)
+            except:
+                print("权重载入错误，随机初始化模型")
         """
         os.remove('日志/')
         os.makedirs('日志/')
@@ -138,47 +161,48 @@ class ACModel(Process):
     def run_nn(self):
         # 预测前先向网络添加噪声
         # print("编号" + str(self.index) + "添加噪声")
-        if self.obs.value == 'f':
-            self.actor.apply_noise()
-            # print("编号" + str(self.index) + "预测动作")
-            """
-            print('stock_state:'+str(self.stock_state))
-            print('price_state:'+str(self.price_state))
-            print('agent_state:'+str(self.agent_state))
-            """
-            action = self.actor.model.predict([self.stock_state, self.agent_state, self.price_state])[0]
-            print("编号" + str(self.index) + "action:" + str(action))
+        self.actor.apply_noise()
+        # print("编号" + str(self.index) + "预测动作")
+        """
+        print('stock_state:'+str(self.stock_state))
+        print('price_state:'+str(self.price_state))
+        print('agent_state:'+str(self.agent_state))
+        """
+        action = self.actor.model.predict([self.stock_state, self.agent_state, self.price_state])[0]
+        print("编号" + str(self.index) + "action:" + str(action))
 
-            """
-            model = self.actor.model
-            inp = [np.array(self.stock_state), np.array(self.agent_state), np.array(self.price_state)]
-            act = get_activations(model, inp)
-            # print(str(act))
-            display_activations(act, cmap="gray", save=True, dir='Agent'+str(self.index)+'/step'+str(self.step.value)+'/')
-            """
-            """
-            dis = "E:/运行结果"
-            if not os.path.exists(dis):
-                os.makedirs(dis)
-            with open(dis + "/Agent编号" + str(self.index) + '.log', 'w') as f:
-                f.write(str(get_activations(model, [np.array(self.stock_state), np.array(self.agent_state), np.array(self.price_state)])))
-            """
-            # TODO:完成ES噪声算法后删除
-            # print("编号" + str(self.index) + "添加噪声")
-            epsilon = random.randint(0, 10)
-            if self.sys_model != 'run' and epsilon < glo.epsilon:
-                action += np.random.randn(2, ) * 0.01
-                if action[0] > 1:
-                    action[0] = 1
-                if action[0] < -1:
-                    action[0] = -1
-                if action[1] > 1:
-                    action[1] = 1
-                if action[1] < -1:
-                    action[1] = -1
-            # print("编号" + str(self.index) + "action_noise:" + str(action))
-        else:
-            action = np.array([random.uniform(-1, 1), random.uniform(-1, 1)])
+
+
+        # if self.draw_hide_layer:
+        """"
+        model = self.actor.model
+        inp = [np.array(self.stock_state), np.array(self.agent_state), np.array(self.price_state)]
+        act = get_activations(model, inp)
+        print(str(act))
+        display_activations(act, save=True, dir='Agent'+str(self.index)+'/step'+str(self.step.value)+'/')
+        self.draw_hide_layer = False
+        """
+        """
+        dis = "E:/运行结果"
+        if not os.path.exists(dis):
+            os.makedirs(dis)
+        with open(dis + "/Agent编号" + str(self.index) + '.log', 'w') as f:
+            f.write(str(get_activations(model, [np.array(self.stock_state), np.array(self.agent_state), np.array(self.price_state)])))
+        """
+        # TODO:完成ES噪声算法后删除
+        # print("编号" + str(self.index) + "添加噪声")
+        epsilon = random.randint(0, 10)
+        if self.sys_model != 'run' and epsilon < glo.epsilon:
+            action += np.random.randn(2, ) * 0.01
+            if action[0] > 1:
+                action[0] = 1
+            if action[0] < -1:
+                action[0] = -1
+            if action[1] > 1:
+                action[1] = 1
+            if action[1] < -1:
+                action[1] = -1
+        # print("编号" + str(self.index) + "action_noise:" + str(action))
         # print("编号" + str(self.index) + "进行交易")
         next_stock_state, next_agent_state, next_price_state, reward = self.env.trade(action)
         # print("编号" + str(self.index) + "reward:" + str(reward))
@@ -199,9 +223,7 @@ class ACModel(Process):
                     self.ep_dict['mid'].append_experience(experience)
                 else:
                     self.ep_dict['high'].append_experience(experience)
-                if self.obs.value == 'f':
-                    # 观察模式不记录loss
-                    self.reward_list.append(reward)
+            self.reward_list.append(reward)
             self.stock_state = next_stock_state
             self.agent_state = next_agent_state
             self.price_state = next_price_state

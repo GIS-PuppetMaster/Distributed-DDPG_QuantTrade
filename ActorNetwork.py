@@ -120,6 +120,7 @@ class ActorNetwork(object):
         # 展开日期时序和特征
         x_stock_state = Reshape((glo.day, glo.stock_state_size))(x_stock_state)
         """
+        """
         x_stock_state = CuDNNLSTM(64, kernel_regularizer=regularizers.l2(0.01), return_sequences=True)(
             input_stock_state)
         x_stock_state = BatchNormalization(epsilon=1e-4, scale=True, center=True)(x_stock_state)
@@ -145,11 +146,15 @@ class ActorNetwork(object):
                                                   block_name='stage4_identity_' + str(i) + '-')
 
         x_stock_state = AveragePooling1D(pool_size=4, strides=2, data_format='channels_first')(x_stock_state)
-        x_stock_state = Flatten()(x_stock_state)
+        """
+        x_stock_state = Flatten(data_format='channels_first')(input_stock_state)
         merge = Concatenate()([x_stock_state, input_price_state, input_agent_state_])
-        layer = Dense_layer_connect(merge, units=16, size=33)
-        layer = Dense_BN(layer, units=32)
-        layer = Dense_BN(layer, units=8)
+        # layer = Dense_layer_connect(merge, units=16, size=33)
+        # layer = Dense_BN(merge, units=32)
+        # layer = Dense_BN(layer, units=8)
+        layer = Dense(64, activation='tanh')(merge)
+        layer = Dense(64, activation='tanh')(layer)
+        layer = Dense(16, activation='tanh')(layer)
         output = Dense(glo.action_size, activation='tanh')(layer)
         model = Model(inputs=[input_stock_state, input_agent_state, input_price_state], outputs=[output])
         model.compile(loss="mse", optimizer="adam")

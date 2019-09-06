@@ -5,7 +5,8 @@ import multiprocessing
 from Experience_pool import Experience_pool
 import os
 import time
-
+from pynput.keyboard import Key, Controller
+from pynput import keyboard
 
 # f = open('trade.log', 'a')
 # sys.stdout = f
@@ -101,8 +102,7 @@ def train_model():
     # 建立模型
     for i in range(glo.agent_num):
         thread_list[i] = ACModel(i, model, thread_flag, ep_dict, time_stamp, multi_episode, multi_step, glo.data,
-                                 glo.date,
-                                 glo.dict, glo.day_data, glo.scaler, glo.min_scaler, flag_lock, obs, sys_model)
+                                 glo.date, glo.dict, glo.day_data, glo.scaler, glo.min_scaler, flag_lock, sys_model)
         # thread_list[i].daemon=True
     execute_model('i')
     for episode in range(glo.train_times):
@@ -116,47 +116,8 @@ def train_model():
             print("episode:" + str(episode))
             print("     times:" + str(t))
             print("运行模型")
-            flag = False
-            obs.value = 'f'
-            pause_reset = False
-            while len(ep_dict['low'].exp_pool) <= glo.experience_pool_size or len(
-                    ep_dict['mid'].exp_pool) <= glo.experience_pool_size or len(
-                ep_dict['high'].exp_pool) <= glo.experience_pool_size:
-                if (len(ep_dict['low'].exp_pool) < glo.mini_batch_size*10 or len(
-                        ep_dict['mid'].exp_pool) < glo.mini_batch_size*10 or len(
-                    ep_dict['high'].exp_pool) < glo.mini_batch_size*10) and sys_model != "run":
-                    # 观察环境模式
-                    flag = True
-                    obs.value = 't'
-                    # 连续运行
-                    print("观察模式")
-                    print("low经验池大小：" + str(len(ep_dict['low'].exp_pool)))
-                    print("mid经验池大小：" + str(len(ep_dict['mid'].exp_pool)))
-                    print("high经验池大小：" + str(len(ep_dict['high'].exp_pool)))
-                if execute_model('r'):
-                    # 当全部pause时
-                    if flag:
-                        # 如果处于观察模式,重置环境
-                        print("观察模式下全部pause，重置环境")
-                        execute_model('v')
-                        # 继续观察
-                    else:
-                        # 否则,启动下一episode
-                        pause_reset = True
-                        break
-                if len(ep_dict['high'].exp_pool) != 0 and len(
-                        ep_dict['high'].exp_pool) != glo.experience_pool_size and len(ep_dict['high'].exp_pool) % (
-                        glo.experience_pool_size / 5) == 0:
-                    save_experience_pool(ep_dict)
-                if len(ep_dict['low'].exp_pool) >= glo.mini_batch_size*10 and \
-                        len(ep_dict['mid'].exp_pool) >= glo.mini_batch_size*10 and \
-                        len(ep_dict['high'].exp_pool) >= glo.mini_batch_size*10:
-                    if flag:
-                        print("观察完成")
-                        obs.value = 'f'
-                        save_experience_pool(ep_dict)
-                    break
-            if pause_reset:
+            if execute_model('r'):
+                # 当全部pause时
                 break
             if sys_model.__contains__("train") or sys_model.__contains__("both"):
                 # 执行训练
@@ -167,8 +128,8 @@ def train_model():
         if episode % (glo.train_times / glo.save_exp_frequency) == 0 and episode != 0 and sys_model != "run":
             save_experience_pool(ep_dict)
         # 每10个episode保存权重
-        if episode != 0 and episode % 5 == 0:
-            execute_model('s')
+        # if episode != 0 and episode % 5 == 0:
+        execute_model('s')
     # 终止所有进程
     # print("终止进程")
     # execute_model('e')
@@ -193,7 +154,7 @@ def run_model():
     for i in range(glo.agent_num):
         thread_list[i] = ACModel(i, model, thread_flag, ep_dict, time_stamp, multi_episode, multi_step, glo.data,
                                  glo.date,
-                                 glo.dict, glo.day_data, glo.scaler, glo.min_scaler, flag_lock, obs, sys_model)
+                                 glo.dict, glo.day_data, glo.scaler, glo.min_scaler, flag_lock, sys_model)
         # thread_list[i].daemon=True
     execute_model('i')
     # 当没有全部暂停时
@@ -218,7 +179,6 @@ def save_experience_pool(ep_dict):
 if __name__ == '__main__':
     # 全局变量
     model = multiprocessing.Value('u', 'i', lock=False)
-    obs = multiprocessing.Value('u', 'f')
     multi_episode = multiprocessing.Value('L', 0)
     multi_step = multiprocessing.Value('L', 0)
     flag_lock = multiprocessing.Lock()

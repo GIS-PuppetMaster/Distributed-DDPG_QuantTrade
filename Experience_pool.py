@@ -17,25 +17,25 @@ class Experience_pool():
         :param experience_list: 经验列表
         :return: list：股票状态、智能体状态、动作、奖励、next_股票状态、next_智能体状态
         """
-        stock_res = 0
-        agent_res = 0
-        price_res = 0
-        action_res = 0
-        reward_res = 0
-        stock_res2 = 0
-        agent_res2 = 0
-        price_res2 = 0
+        stock_res = np.empty(shape=(0,))
+        agent_res = np.empty(shape=(0,))
+        price_res = np.empty(shape=(0,))
+        action_res = np.empty(shape=(0,))
+        reward_res = np.empty(shape=(0,))
+        stock_res2 = np.empty(shape=(0,))
+        agent_res2 = np.empty(shape=(0,))
+        price_res2 = np.empty(shape=(0,))
         for i in range(experience_list.__len__()):
             ex = experience_list[i]
             if i == 0:
-                stock_res = ex.stock_state
-                agent_res = ex.agent_state
-                price_res = ex.price_state
-                action_res = ex.action
-                reward_res = ex.reward
-                stock_res2 = ex.stock_state2
-                agent_res2 = ex.agent_state2
-                price_res2 = ex.price_state2
+                stock_res = np.array(ex.stock_state)
+                agent_res = np.array(ex.agent_state)
+                price_res = np.array(ex.price_state)
+                action_res = np.array(ex.action)
+                reward_res = np.array(ex.reward)
+                stock_res2 = np.array(ex.stock_state2)
+                agent_res2 = np.array(ex.agent_state2)
+                price_res2 = np.array(ex.price_state2)
             else:
                 stock_res = np.concatenate((ex.stock_state, stock_res), axis=0)
                 agent_res = np.concatenate((ex.agent_state, agent_res), axis=0)
@@ -67,6 +67,8 @@ class Experience_pool():
         :return: 从经验池中随机采样的经验训练包
         """
         index_list = [i for i in range(0, len(self.exp_pool))]
+        if len(self.exp_pool) <= batch_size:
+            batch_size = len(self.exp_pool)
         sample_index_list = random.sample(index_list, batch_size)
         res = []
         for i in sample_index_list:

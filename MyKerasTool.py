@@ -102,21 +102,21 @@ def Dense_layer_connect(input, size, units=8):
     # 升维，增加深度轴
     input_ = Reshape((1, size))(input)
     dense0 = Dense(units, kernel_regularizer=regularizers.l2(0.01))(input_)
-    dense0_bn = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense0)
+    dense0_bn = BatchNormalization(axis=1, epsilon=1e-4, scale=True, center=True)(dense0)
     dense0 = Activation('tanh')(dense0_bn)
 
     dense1 = Dense(units, kernel_regularizer=regularizers.l2(0.01))(dense0)
-    dense1_bn = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense1)
+    dense1_bn = BatchNormalization(axis=1, epsilon=1e-4, scale=True, center=True)(dense1)
     dense1 = Activation('tanh')(dense1_bn)
 
     dense2 = Dense(units, kernel_regularizer=regularizers.l2(0.01))(dense1)
-    dense2_bn = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense2)
+    dense2_bn = BatchNormalization(axis=1, epsilon=1e-4, scale=True, center=True)(dense2)
     # 在深度轴上合并
     add2 = Concatenate(axis=1)([dense0_bn, dense2_bn])
     dense2 = Activation('tanh')(add2)
 
     dense3 = Dense(units, kernel_regularizer=regularizers.l2(0.01))(dense2)
-    dense3_bn = BatchNormalization(epsilon=1e-4, scale=True, center=True)(dense3)
+    dense3_bn = BatchNormalization(axis=1, epsilon=1e-4, scale=True, center=True)(dense3)
     add3 = Concatenate(axis=1)([dense0_bn, dense1_bn, dense3_bn])
     dense3 = Activation('tanh')(add3)
     # 降维展平

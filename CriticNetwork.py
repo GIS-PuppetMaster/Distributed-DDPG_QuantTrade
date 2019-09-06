@@ -58,6 +58,7 @@ class CriticNetwork(object):
         input_agent_state_ = BatchNormalization(axis=1, epsilon=1e-4, scale=True, center=True)(input_agent_state)
         input_price_state = Input(shape=(glo.price_state_size,))
         input_action = Input(shape=(glo.action_size,))
+        """
         x_stock_state = CuDNNLSTM(64, kernel_regularizer=regularizers.l2(0.01), return_sequences=True)(
             input_stock_state)
         x_stock_state = BatchNormalization(epsilon=1e-4, scale=True, center=True)(x_stock_state)
@@ -82,10 +83,11 @@ class CriticNetwork(object):
             x_stock_state = Conv1D_identity_block(x_stock_state, filters=(4, 4, 8), block_name='stage4_identity_' + str(i) + '-')
 
         x_stock_state = AveragePooling1D(pool_size=4, strides=2, data_format='channels_first')(x_stock_state)
-        x_stock_state = Flatten()(x_stock_state)
+        """
+        x_stock_state = Flatten(data_format='channels_first')(input_stock_state)
         merge = Concatenate()([x_stock_state, input_price_state, input_agent_state_, input_action])
-        layer = Dense_layer_connect(merge, units=16, size=35)
-        layer = Dense_BN(layer, units=32)
+        # layer = Dense_layer_connect(merge, units=16, size=35)
+        layer = Dense_BN(merge, units=32)
         layer = Dense_BN(layer, units=8)
         output = Dense(1)(layer)
         model = Model(inputs=[input_stock_state, input_agent_state, input_price_state, input_action], outputs=[output])

@@ -82,7 +82,7 @@ def init():
         scaler[s] = scale
         arg = {'mean': scale.mean_.tolist(), 'var': scale.var_.tolist()}
         day_arg[s] = arg
-        # 记录min_data白哦准话参数
+        # 记录min_data标准化参数
         temp_data = temp_data.values
         scale = StandardScaler().fit(temp_data)
         min_scaler[s] = scale
